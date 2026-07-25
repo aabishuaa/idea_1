@@ -8,10 +8,14 @@ All UI plus the on-device liveness challenge. Talks to Supabase directly
 ```bash
 cp .env.example .env      # fill in (SETUP.md §3)
 npm install
-npx expo start            # Expo Go — everything except camera liveness
+npm start                 # Expo Go (expo start --go) — everything except camera liveness
 npx expo run:android      # custom dev build — full liveness (ML Kit)
 npm run typecheck
 ```
+
+`npm start` forces Expo Go mode so the QR always opens in the Expo Go app,
+even though `expo-dev-client` is installed. When you're testing against a
+dev build instead, use `npm run start:devclient`.
 
 If dependency versions drift from your installed Expo SDK, run
 `npx expo install --fix` to realign them.

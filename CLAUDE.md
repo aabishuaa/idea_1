@@ -173,7 +173,7 @@ SETUP.md
 ```bash
 # app
 cd app && npm install
-cd app && npx expo start                  # dev (Expo Go — no camera/liveness)
+cd app && npm start                       # dev via Expo Go (expo start --go) — no camera/liveness
 cd app && npx expo run:android            # custom dev build (full features)
 cd app && npm run typecheck               # tsc --noEmit
 cd app && npm run lint
