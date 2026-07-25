@@ -1,0 +1,235 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
+
+import { StatusPill } from '@/components/ui/badges';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Rating } from '@/components/ui/Rating';
+import { Screen } from '@/components/ui/Screen';
+import { AppText } from '@/components/ui/Text';
+import { LoadingState } from '@/components/ui/states';
+import { formatDateTime, formatJmd } from '@/lib/format';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/AuthProvider';
+import { useTheme } from '@/theme/ThemeContext';
+import { space } from '@/theme/tokens';
+import type { Job, JobStatus, Review } from '@/types/db';
+
+interface JobDetail extends Job {
+  customer: { full_name: string } | null;
+  worker: { full_name: string } | null;
+}
+
+/** Booking detail: status, lifecycle actions, review on completion (design 07). */
+export default function JobDetailScreen() {
+  const { id, confirmed } = useLocalSearchParams<{ id: string; confirmed?: string }>();
+  const { session } = useAuth();
+  const { colors } = useTheme();
+  const [job, setJob] = useState<JobDetail | null>(null);
+  const [review, setReview] = useState<Review | null>(null);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    const [jobRes, reviewRes] = await Promise.all([
+      supabase
+        .from('jobs')
+        .select(
+          '*, customer:profiles!jobs_customer_id_fkey(full_name), worker:profiles!jobs_worker_id_fkey(full_name)',
+        )
+        .eq('id', id)
+        .maybeSingle(),
+      supabase.from('reviews').select('*').eq('job_id', id).maybeSingle(),
+    ]);
+    setJob((jobRes.data as JobDetail | null) ?? null);
+    setReview((reviewRes.data as Review | null) ?? null);
+  }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!job) {
+    return (
+      <Screen scroll={false}>
+        <LoadingState label="Loading booking…" />
+      </Screen>
+    );
+  }
+
+  const isWorker = session?.user.id === job.worker_id;
+  const isCustomer = session?.user.id === job.customer_id;
+
+  const transition = async (status: JobStatus) => {
+    setBusy(true);
+    const { error } = await supabase.from('jobs').update({ status }).eq('id', job.id);
+    setBusy(false);
+    if (!error) void load();
+  };
+
+  const submitReview = async () => {
+    if (!session || rating === 0) return;
+    setBusy(true);
+    const { error } = await supabase.from('reviews').insert({
+      job_id: job.id,
+      worker_id: job.worker_id,
+      reviewer_id: session.user.id,
+      rating,
+      comment: comment.trim(),
+    });
+    setBusy(false);
+    if (!error) void load();
+  };
+
+  return (
+    <Screen>
+      <View style={{ gap: space.s5 }}>
+        {/* Confirmation banner (design 07) */}
+        {confirmed === '1' && job.status === 'requested' && (
+          <View style={{ alignItems: 'center', gap: space.s3, paddingVertical: space.s4 }}>
+            <View
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 36,
+                backgroundColor: colors.successSoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="checkmark" size={36} color={colors.success} />
+            </View>
+            <AppText variant="h2">Request sent!</AppText>
+            <AppText variant="bodySm" color="textMuted" style={{ textAlign: 'center' }}>
+              {job.worker?.full_name ?? 'The pro'} will confirm shortly. We'll notify you
+              as soon as they respond.
+            </AppText>
+          </View>
+        )}
+
+        <Card>
+          <View style={{ gap: space.s3 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <AppText variant="h3" style={{ flex: 1 }}>
+                {job.title}
+              </AppText>
+              <StatusPill status={job.status} />
+            </View>
+            {job.description ? (
+              <AppText variant="bodySm" color="textMuted">
+                {job.description}
+              </AppText>
+            ) : null}
+            <View style={{ gap: space.s2 }}>
+              <Row label="With" value={isCustomer ? job.worker?.full_name ?? '—' : job.customer?.full_name ?? '—'} />
+              <Row label="Requested" value={formatDateTime(job.requested_at)} />
+              {job.parish && <Row label="Where" value={job.parish} />}
+              <Row label="Urgency" value={job.urgency} />
+              {(job.budget_min_jmd ?? job.budget_max_jmd) != null && (
+                <Row label="Budget" value={formatJmd(job.budget_max_jmd ?? job.budget_min_jmd)} />
+              )}
+              {job.agreed_price_jmd != null && (
+                <Row label="Agreed price" value={formatJmd(job.agreed_price_jmd)} />
+              )}
+            </View>
+          </View>
+        </Card>
+
+        {/* Lifecycle actions (FR-JOB-1/2; transitions enforced in SQL) */}
+        <View style={{ gap: space.s3 }}>
+          {isWorker && job.status === 'requested' && (
+            <>
+              <Button title="Accept job" fullWidth loading={busy} onPress={() => transition('accepted')} />
+              <Button title="Decline" variant="secondary" fullWidth onPress={() => transition('declined')} />
+            </>
+          )}
+          {isWorker && job.status === 'accepted' && (
+            <Button title="Start job" fullWidth loading={busy} onPress={() => transition('in_progress')} />
+          )}
+          {isWorker && job.status === 'in_progress' && (
+            <Button title="Mark completed" fullWidth loading={busy} onPress={() => transition('completed')} />
+          )}
+          {(isWorker || isCustomer) &&
+            ['requested', 'accepted', 'in_progress'].includes(job.status) && (
+              <Button title="Cancel" variant="text" onPress={() => transition('cancelled')} />
+            )}
+          <Button
+            title="Open chat"
+            variant="secondary"
+            fullWidth
+            onPress={async () => {
+              const { data: thread } = await supabase
+                .from('threads')
+                .select('id')
+                .eq('customer_id', job.customer_id)
+                .eq('worker_id', job.worker_id)
+                .maybeSingle();
+              if (thread) {
+                router.push(`/thread/${thread.id}`);
+              } else {
+                const { data: created } = await supabase
+                  .from('threads')
+                  .insert({ customer_id: job.customer_id, worker_id: job.worker_id, job_id: job.id })
+                  .select('id')
+                  .single();
+                if (created) router.push(`/thread/${created.id}`);
+              }
+            }}
+          />
+        </View>
+
+        {/* Review (FR-JOB-3) */}
+        {isCustomer && job.status === 'completed' && !review && (
+          <Card>
+            <View style={{ gap: space.s4 }}>
+              <AppText variant="h3">How did it go?</AppText>
+              <Rating value={rating} onChange={setRating} />
+              <Input
+                placeholder="Share a few words about the work…"
+                value={comment}
+                onChangeText={setComment}
+                multiline
+              />
+              <Button
+                title="Submit review"
+                fullWidth
+                disabled={rating === 0}
+                loading={busy}
+                onPress={submitReview}
+              />
+            </View>
+          </Card>
+        )}
+        {review && (
+          <Card>
+            <View style={{ gap: space.s2 }}>
+              <AppText variant="label">Review</AppText>
+              <Rating value={review.rating} />
+              {review.comment ? (
+                <AppText variant="bodySm" color="textMuted">
+                  {review.comment}
+                </AppText>
+              ) : null}
+            </View>
+          </Card>
+        )}
+      </View>
+    </Screen>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <AppText variant="bodySm" color="textMuted">
+        {label}
+      </AppText>
+      <AppText variant="bodySm">{value}</AppText>
+    </View>
+  );
+}

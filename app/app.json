@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "myB",
+    "slug": "myb",
+    "version": "0.1.0",
+    "scheme": "myb",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0E16"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bitbybit.myb",
+      "infoPlist": {
+        "NSCameraUsageDescription": "myB uses the camera for the identity verification selfie and liveness check.",
+        "NSPhotoLibraryUsageDescription": "myB lets you pick photos for your ID upload and work portfolio."
+      }
+    },
+    "android": {
+      "package": "com.bitbybit.myb",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0E16"
+      },
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#1D6FD8"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "myB lets you pick photos for your ID upload and work portfolio."
+        }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "myB uses the camera for the identity verification selfie and liveness check.",
+          "enableCodeScanner": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_ME_RUN_EAS_INIT"
+      }
+    }
+  }
+}
