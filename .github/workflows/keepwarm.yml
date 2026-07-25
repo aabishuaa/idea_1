@@ -1,0 +1,27 @@
+name: Keep Supabase warm
+
+# Supabase free-tier projects auto-pause after ~7 days without activity.
+# Pinging the keepwarm edge function (which reads one row) counts as activity.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1,4" # 06:17 UTC Mon + Thu
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keepwarm edge function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_URL secret not set — see SETUP.md §1.5" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/functions/v1/keepwarm"

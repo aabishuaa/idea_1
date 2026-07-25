@@ -1,0 +1,42 @@
+# Secrets — never commit real keys (see .env.example)
+.env
+.env.*
+!.env.example
+*.pem
+
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+android/
+ios/
+.metro-health-check*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Supabase local dev
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
