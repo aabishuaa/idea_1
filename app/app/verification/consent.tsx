@@ -45,7 +45,7 @@ export default function ConsentScreen() {
       <View style={{ gap: space.s5 }}>
         <AppText variant="h2">Before we start</AppText>
         <AppText variant="body" color="textMuted">
-          To verify it's really you, myB needs your permission to:
+          To verify it&apos;s really you, myB needs your permission to:
         </AppText>
 
         <Card>
