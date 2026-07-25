@@ -4,19 +4,26 @@ import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { isExpoGo } from '@/lib/runtime';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 
 /**
  * Registers the device for Expo push notifications (FR-MSG-2) and stores the
- * token in push_tokens. Skips gracefully when running without an EAS project
- * id (SETUP.md §3.3) or on simulators.
+ * token in push_tokens. Skips gracefully in Expo Go (remote push needs a dev
+ * build since SDK 53), without an EAS project id (SETUP.md §3.3), or on
+ * simulators.
  */
 export function usePushRegistration(): void {
   const { session } = useAuth();
 
   useEffect(() => {
     if (!session || !Device.isDevice) return;
+
+    if (isExpoGo) {
+      console.log('[myB] Push disabled in Expo Go — remote notifications need a dev build.');
+      return;
+    }
 
     const projectId: string | undefined =
       Constants.expoConfig?.extra?.eas?.projectId;

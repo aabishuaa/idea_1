@@ -4,7 +4,8 @@
   "main": "expo-router/entry",
   "private": true,
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --go",
+    "start:devclient": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
@@ -37,10 +38,19 @@
     "react-native-worklets-core": "^1.6.0"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.18.6",
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/plugin-transform-arrow-functions": "^7.29.7",
+    "@babel/plugin-transform-shorthand-properties": "^7.29.7",
+    "@babel/plugin-transform-template-literals": "^7.29.7",
     "@types/react": "~19.1.0",
+    "babel-preset-expo": "~54.0.12",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "react-dom": "19.1.0"
   },
   "expo": {
     "install": {

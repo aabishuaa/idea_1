@@ -69,7 +69,7 @@ export default function IdUploadScreen() {
       <View style={{ gap: space.s5 }}>
         <AppText variant="h2">Your government ID</AppText>
         <AppText variant="body" color="textMuted">
-          Take a clear photo of your national ID, passport, or driver's licence. Make
+          Take a clear photo of your national ID, passport, or driver&apos;s licence. Make
           sure the photo of your face is sharp and glare-free.
         </AppText>
 

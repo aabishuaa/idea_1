@@ -156,7 +156,7 @@ placeholders written for development, not legal guidance (each file's front matt
 cd app
 cp .env.example .env        # fill in the REPLACE_ME values
 npm install
-npx expo start              # scan the QR with Expo Go
+npm start                   # expo start --go: scan the QR with Expo Go
 ```
 
 **Works in Expo Go:** auth, profiles, discovery/matching, jobs, chat, BizBot,
@@ -254,5 +254,10 @@ still runs; push registration is skipped with a console notice.
   extensions available; make sure migration `0001` ran first (`supabase migration list`).
 - **Liveness screen shows "requires a development build"** — you're in Expo Go; build a
   dev client (§3.2).
+- **Bundling fails with `EXPO_ROUTER_APP_ROOT` / `require.context` or a missing Babel
+  plugin** — the Babel toolchain didn't resolve. `babel-preset-expo` and the plugins the
+  worklets transform needs are pinned in `app/package.json`, so this means a stale or
+  mixed install: delete `node_modules`, run `npm install` (keep `package-lock.json` —
+  it's committed on purpose), then restart with `npx expo start --clear`.
 - **Project paused** — free Supabase pauses after inactivity; restore from the dashboard,
   then confirm the keep-warm workflow secrets are set (§1.5).

@@ -51,7 +51,7 @@ pip install -r requirements.txt && uvicorn main:app --reload
 
 # 3. App
 cd app && cp .env.example .env          # fill in Supabase URL + anon key
-npm install && npx expo start
+npm install && npm start                # Expo Go
 ```
 
 ## Engineering ground rules

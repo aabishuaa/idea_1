@@ -1,4 +1,3 @@
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { View } from 'react-native';
@@ -10,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
 import { LoadingState } from '@/components/ui/states';
 import { AiServiceError, matchSelfie } from '@/lib/ai';
+import { isExpoGo } from '@/lib/runtime';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { space } from '@/theme/tokens';
@@ -17,12 +17,10 @@ import { space } from '@/theme/tokens';
 // Native ML Kit modules don't exist inside Expo Go — load the camera flow only
 // in a custom dev build (SETUP.md §3.2). The `any` casts confine the dynamic
 // require to this one boundary.
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let LivenessCamera: React.ComponentType<any> | null = null;
 if (!isExpoGo) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     LivenessCamera = require('@/features/liveness/LivenessCamera').LivenessCamera;
   } catch {
     LivenessCamera = null;
@@ -108,7 +106,7 @@ export default function LivenessScreen() {
             <View style={{ gap: space.s3 }}>
               <AppText variant="label">Development build required</AppText>
               <AppText variant="bodySm" color="textMuted">
-                The camera liveness challenge uses native ML Kit modules that aren't
+                The camera liveness challenge uses native ML Kit modules that aren&apos;t
                 available in Expo Go. Build the dev client to run the real check:
               </AppText>
               <AppText variant="bodySm" color="accent">

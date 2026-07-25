@@ -106,7 +106,7 @@ export default function JobDetailScreen() {
             </View>
             <AppText variant="h2">Request sent!</AppText>
             <AppText variant="bodySm" color="textMuted" style={{ textAlign: 'center' }}>
-              {job.worker?.full_name ?? 'The pro'} will confirm shortly. We'll notify you
+              {job.worker?.full_name ?? 'The pro'} will confirm shortly. We&apos;ll notify you
               as soon as they respond.
             </AppText>
           </View>
