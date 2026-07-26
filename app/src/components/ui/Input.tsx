@@ -17,9 +17,19 @@ interface InputProps extends TextInputProps {
  * Design-system text field: default / focused (accent ring) / error / success /
  * disabled states, plus optional leading icon (search etc.).
  */
-export function Input({ label, error, success, icon, editable = true, ...rest }: InputProps) {
+export function Input({
+  label,
+  error,
+  success,
+  icon,
+  editable = true,
+  secureTextEntry,
+  ...rest
+}: InputProps) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
+  // Password fields get a show/hide toggle automatically.
+  const [hidden, setHidden] = useState(secureTextEntry === true);
 
   const borderColor = error
     ? colors.error
@@ -61,6 +71,7 @@ export function Input({ label, error, success, icon, editable = true, ...rest }:
           }}
           placeholderTextColor={colors.textMuted}
           editable={editable}
+          secureTextEntry={secureTextEntry ? hidden : false}
           onFocus={(event) => {
             setFocused(true);
             rest.onFocus?.(event);
@@ -71,6 +82,17 @@ export function Input({ label, error, success, icon, editable = true, ...rest }:
           }}
           {...rest}
         />
+        {secureTextEntry ? (
+          <Ionicons
+            name={hidden ? 'eye-outline' : 'eye-off-outline'}
+            size={20}
+            color={colors.textMuted}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}
+            onPress={() => setHidden((current) => !current)}
+            suppressHighlighting
+          />
+        ) : null}
       </View>
       {error ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s1 }}>
