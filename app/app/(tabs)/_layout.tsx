@@ -6,6 +6,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/Text';
+import { ScalePress, lightTap } from '@/components/ui/animated';
 import { usePushRegistration } from '@/hooks/usePushRegistration';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -38,7 +39,10 @@ function MybTabBar({ state, navigation }: BottomTabBarProps) {
         accessibilityRole="tab"
         accessibilityState={{ selected: focused }}
         accessibilityLabel={TAB_LABELS[routeName]}
-        onPress={() => navigation.navigate(routeName)}
+        onPress={() => {
+          if (!focused) lightTap();
+          navigation.navigate(routeName);
+        }}
         style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: space.s2 }}
       >
         <Ionicons
@@ -73,32 +77,34 @@ function MybTabBar({ state, navigation }: BottomTabBarProps) {
     >
       {routes.slice(0, 2).map((name) => renderTab(name, routes.indexOf(name)))}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Request a job"
-        onPress={() => router.push('/job/new')}
-        style={({ pressed }) => ({
-          width: 52,
-          height: 52,
-          borderRadius: radius.full,
-          backgroundColor: pressed ? colors.primaryHover : colors.primary,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginTop: -space.s5,
-          marginHorizontal: space.s2,
-          ...(isDark
-            ? { borderWidth: 1, borderColor: colors.border }
-            : {
-                shadowColor: '#101828',
-                shadowOpacity: 0.16,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 6,
-              }),
-        })}
-      >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
-      </Pressable>
+      <View style={{ marginTop: -space.s5, marginHorizontal: space.s2 }}>
+        <ScalePress
+          accessibilityRole="button"
+          accessibilityLabel="Request a job"
+          haptic
+          to={0.9}
+          onPress={() => router.push('/job/new')}
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: radius.full,
+            backgroundColor: colors.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...(isDark
+              ? { borderWidth: 1, borderColor: colors.border }
+              : {
+                  shadowColor: '#101828',
+                  shadowOpacity: 0.16,
+                  shadowRadius: 12,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 6,
+                }),
+          }}
+        >
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </ScalePress>
+      </View>
 
       {routes.slice(2).map((name) => renderTab(name, routes.indexOf(name)))}
     </View>

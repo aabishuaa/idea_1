@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 
 import { AppText } from '@/components/ui/Text';
+import { FadeSlideIn } from '@/components/ui/animated';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
@@ -35,19 +36,23 @@ export default function SplashScreen() {
         gap: space.s3,
       }}
     >
-      <Image
-        source={require('../assets/splash-icon.png')}
-        style={{ width: 96, height: 96 }}
-        accessibilityLabel="myB logo"
-      />
-      <AppText variant="display">myB</AppText>
-      <AppText variant="body" color="textMuted">
-        Mind yuh business.
-      </AppText>
-      <View style={{ position: 'absolute', bottom: space.s16 }}>
-        <AppText variant="overline" color="textMuted">
-          All you need. One place.
+      <FadeSlideIn from="bottom" distance={20} duration={500} style={{ alignItems: 'center', gap: space.s3 }}>
+        <Image
+          source={require('../assets/splash-icon.png')}
+          style={{ width: 96, height: 96 }}
+          accessibilityLabel="myB logo"
+        />
+        <AppText variant="display">myB</AppText>
+        <AppText variant="body" color="textMuted">
+          Mind yuh business.
         </AppText>
+      </FadeSlideIn>
+      <View style={{ position: 'absolute', bottom: space.s16 }}>
+        <FadeSlideIn delay={400} duration={500} from="none">
+          <AppText variant="overline" color="textMuted">
+            All you need. One place.
+          </AppText>
+        </FadeSlideIn>
       </View>
     </View>
   );

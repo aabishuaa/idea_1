@@ -1,21 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { WorkerCard } from '@/components/WorkerCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
-import { Chip } from '@/components/ui/badges';
 import { Input } from '@/components/ui/Input';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
-import { LoadingState } from '@/components/ui/states';
+import { StatusPill } from '@/components/ui/badges';
+import { FadeSlideIn, ScalePress, Skeleton, Stagger } from '@/components/ui/animated';
+import { formatDateTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
-import { space } from '@/theme/tokens';
-import type { AppNotification, MatchedWorker, Trade } from '@/types/db';
+import { radius, space } from '@/theme/tokens';
+import type { AppNotification, Job, MatchedWorker, Trade, WorkerProfile } from '@/types/db';
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -24,16 +27,37 @@ function greeting(): string {
   return 'Good evening';
 }
 
-/** Home (design 04): greeting, search, category chips, top pros near you. */
+/** Line icons per trade (falls back to the emoji from the trades table). */
+const TRADE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  plumbing: 'water',
+  electrical: 'flash',
+  carpentry: 'hammer',
+  painting: 'color-palette',
+  masonry: 'cube',
+  tiling: 'grid',
+  welding: 'flame',
+  mechanics: 'car-sport',
+  'appliance-repair': 'build',
+  landscaping: 'leaf',
+  'ac-refrigeration': 'snow',
+  roofing: 'home',
+};
+
+/** Home (design 04): greeting, search, categories, top pros, recent bookings. */
 export default function HomeScreen() {
-  const { profile } = useAuth();
+  const { session, profile } = useAuth();
   const { colors } = useTheme();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [topPros, setTopPros] = useState<MatchedWorker[] | null>(null);
   const [suggestion, setSuggestion] = useState<AppNotification | null>(null);
+  const [recentJobs, setRecentJobs] = useState<Job[]>([]);
+  const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
+  const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
-    const [tradesRes, prosRes, suggestionRes] = await Promise.all([
+    if (!session) return;
+    const userId = session.user.id;
+    const [tradesRes, prosRes, suggestionRes, jobsRes, workerRes, unreadRes] = await Promise.all([
       supabase.from('trades').select('*').order('label'),
       supabase.rpc('match_workers', { p_limit: 6 }),
       supabase
@@ -44,11 +68,28 @@ export default function HomeScreen() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('jobs')
+        .select('*')
+        .or(`customer_id.eq.${userId},worker_id.eq.${userId}`)
+        .order('requested_at', { ascending: false })
+        .limit(3),
+      profile?.is_worker
+        ? supabase.from('worker_profiles').select('*').eq('user_id', userId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .is('read_at', null)
+        .neq('sender_id', userId),
     ]);
     setTrades((tradesRes.data as Trade[] | null) ?? []);
     setTopPros((prosRes.data as MatchedWorker[] | null) ?? []);
     setSuggestion((suggestionRes.data as AppNotification | null) ?? null);
-  }, []);
+    setRecentJobs((jobsRes.data as Job[] | null) ?? []);
+    setWorkerProfile((workerRes.data as WorkerProfile | null) ?? null);
+    setUnread(('count' in unreadRes ? unreadRes.count : 0) ?? 0);
+  }, [session, profile?.is_worker]);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,117 +98,338 @@ export default function HomeScreen() {
   );
 
   const firstName = profile?.full_name.split(' ')[0] ?? 'there';
+  const featuredTrades = trades.slice(0, 4);
+
+  // Level from the portable reputation score (same rule as Profile).
+  const xp = Math.round(Number(workerProfile?.reputation ?? 0) * 10);
+  const level = Math.min(4, Math.floor(xp / 250) + 1);
 
   return (
     <Screen safeTop>
+      <LinearGradient
+        colors={[colors.accentSoft, 'transparent']}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 240 }}
+        pointerEvents="none"
+      />
       <View style={{ gap: space.s5 }}>
-        {/* Header */}
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <View>
-            <AppText variant="caption" color="textMuted">
-              {greeting()}
-            </AppText>
-            <AppText variant="h2">Hi, {firstName} 👋</AppText>
+        <Stagger interval={60} gap={space.s5}>
+          {/* Header */}
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <View>
+              <AppText variant="caption" color="textMuted">
+                {greeting()}
+              </AppText>
+              <AppText variant="h2">Hi, {firstName} 👋</AppText>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
+                onPress={() => router.push('/messages')}
+                hitSlop={8}
+              >
+                <Ionicons name="chatbubbles-outline" size={24} color={colors.text} />
+                {unread > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -6,
+                      minWidth: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: colors.primary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 3,
+                    }}
+                  >
+                    <AppText variant="caption" style={{ color: '#FFFFFF', fontSize: 10, lineHeight: 12 }}>
+                      {unread > 9 ? '9+' : unread}
+                    </AppText>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Your profile"
+                onPress={() => router.push('/(tabs)/profile')}
+              >
+                <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url} size="sm" />
+              </Pressable>
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+
+          {/* Search */}
+          <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/search')}>
+            <View pointerEvents="none">
+              <Input icon="search" placeholder="What service do you need?" editable={false} />
+            </View>
+          </Pressable>
+
+          {/* Category tiles */}
+          <View style={{ gap: space.s3 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 }}>
+              {(featuredTrades.length > 0
+                ? featuredTrades
+                : [
+                    { slug: 'plumbing', label: 'Plumbing', emoji: '🔧' },
+                    { slug: 'electrical', label: 'Electrical', emoji: '⚡' },
+                    { slug: 'carpentry', label: 'Carpentry', emoji: '🪚' },
+                    { slug: 'painting', label: 'Painting', emoji: '🎨' },
+                  ]
+              ).map((trade) => (
+                <ScalePress
+                  key={trade.slug}
+                  haptic
+                  accessibilityLabel={trade.label}
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/search', params: { trade: trade.slug } })
+                  }
+                  style={{ flex: 1 }}
+                >
+                  <View
+                    style={{
+                      aspectRatio: 1,
+                      borderRadius: radius.lg,
+                      backgroundColor: colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: space.s1,
+                      paddingHorizontal: 2,
+                    }}
+                  >
+                    {TRADE_ICONS[trade.slug] ? (
+                      <Ionicons name={TRADE_ICONS[trade.slug]} size={24} color={colors.accent} />
+                    ) : (
+                      <AppText variant="h3">{trade.emoji}</AppText>
+                    )}
+                    <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                      {trade.label}
+                    </AppText>
+                  </View>
+                </ScalePress>
+              ))}
+            </View>
             <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Messages"
-              onPress={() => router.push('/messages')}
+              accessibilityRole="link"
+              onPress={() => router.push('/(tabs)/search')}
+              style={{ alignSelf: 'flex-end' }}
               hitSlop={8}
             >
-              <Ionicons name="chatbubbles-outline" size={24} color={colors.text} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Your profile"
-              onPress={() => router.push('/(tabs)/profile')}
-            >
-              <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url} size="sm" />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Search */}
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/search')}>
-          <View pointerEvents="none">
-            <Input icon="search" placeholder="Search plumbers, electricians…" editable={false} />
-          </View>
-        </Pressable>
-
-        {/* Formalization suggestion card (FR-BIZ-6: suggest, never enroll) */}
-        {suggestion && (
-          <Card
-            raised
-            onPress={async () => {
-              await supabase
-                .from('notifications')
-                .update({ read_at: new Date().toISOString() })
-                .eq('id', suggestion.id);
-              router.push('/formalize');
-            }}
-          >
-            <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'center' }}>
-              <Ionicons name="ribbon" size={28} color={colors.accent} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <AppText variant="label">{suggestion.title}</AppText>
-                <AppText variant="bodySm" color="textMuted">
-                  {suggestion.body}
-                </AppText>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </View>
-          </Card>
-        )}
-
-        {/* Category chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: space.s2 }}>
-            <Chip label="All" selected onPress={() => router.push('/(tabs)/search')} />
-            {trades.map((trade) => (
-              <Chip
-                key={trade.slug}
-                label={`${trade.emoji} ${trade.label}`}
-                onPress={() =>
-                  router.push({ pathname: '/(tabs)/search', params: { trade: trade.slug } })
-                }
-              />
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Top pros */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <AppText variant="h3">Top pros near you</AppText>
-          <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/search')}>
-            <AppText variant="bodySm" color="accent">
-              See all
-            </AppText>
-          </Pressable>
-        </View>
-
-        {topPros === null ? (
-          <LoadingState label="Finding pros…" />
-        ) : (
-          <View style={{ gap: space.s4 }}>
-            {topPros.map((worker) => (
-              <WorkerCard
-                key={worker.worker_id}
-                worker={worker}
-                onPress={() => router.push(`/worker/${worker.worker_id}`)}
-              />
-            ))}
-            {topPros.length === 0 && (
-              <AppText variant="bodySm" color="textMuted">
-                No workers yet — check back soon, or become the first pro in your
-                parish from your profile.
+              <AppText variant="bodySm" color="accent">
+                View all →
               </AppText>
-            )}
+            </Pressable>
           </View>
-        )}
+
+          {/* Verification prompt — trust is the product; surface the gate. */}
+          {profile && !profile.identity_verified && (
+            <Card raised onPress={() => router.push('/verification')}>
+              <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.accentSoft,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="shield-checkmark" size={22} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label">Verify your identity</AppText>
+                  <AppText variant="bodySm" color="textMuted">
+                    ID + liveness check unlocks the Verified badge people trust.
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </Card>
+          )}
+
+          {/* Formalization suggestion (FR-BIZ-6: suggest, never enroll) */}
+          {suggestion && (
+            <Card raised onPress={() => void markSuggestionRead(suggestion, () => router.push('/formalize'))}>
+              <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'center' }}>
+                <Ionicons name="ribbon" size={28} color={colors.accent} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label">{suggestion.title}</AppText>
+                  <AppText variant="bodySm" color="textMuted">
+                    {suggestion.body}
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </Card>
+          )}
+
+          {/* Worker snapshot: level, and the doors into earnings + BizBot */}
+          {profile?.is_worker && workerProfile && (
+            <Card>
+              <View style={{ gap: space.s4 }}>
+                <ProgressBar
+                  label={`Level ${level} · ${level >= 3 ? 'Trusted Pro' : 'Rising'}`}
+                  trailing={`${xp} / ${level * 250} XP`}
+                  progress={(xp % 250) / 250}
+                  helper={`${workerProfile.jobs_completed} jobs completed · rating ${Number(workerProfile.rating_avg).toFixed(1)}`}
+                />
+                <View style={{ flexDirection: 'row', gap: space.s3 }}>
+                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: space.s2,
+                        borderRadius: radius.md,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        paddingVertical: space.s3,
+                      }}
+                    >
+                      <Ionicons name="wallet-outline" size={18} color={colors.accent} />
+                      <AppText variant="label">Earnings</AppText>
+                    </View>
+                  </ScalePress>
+                  <ScalePress haptic onPress={() => router.push('/formalize/bizbot')} style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: space.s2,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.accentSoft,
+                        paddingVertical: space.s3,
+                      }}
+                    >
+                      <Ionicons name="sparkles" size={18} color={colors.accent} />
+                      <AppText variant="label" color="accent">
+                        Ask BizBot
+                      </AppText>
+                    </View>
+                  </ScalePress>
+                </View>
+              </View>
+            </Card>
+          )}
+
+          {/* Grow prompt for customers who haven't listed their skills yet */}
+          {profile && !profile.is_worker && (
+            <Card onPress={() => router.push('/worker-setup')}>
+              <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'center' }}>
+                <Ionicons name="trending-up" size={26} color={colors.accent} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label">Have a skill? Earn with it.</AppText>
+                  <AppText variant="bodySm" color="textMuted">
+                    List your services and start building your reputation.
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </Card>
+          )}
+
+          {/* Top pros */}
+          <View
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <AppText variant="h3">Top rated professionals</AppText>
+            <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/search')} hitSlop={8}>
+              <AppText variant="bodySm" color="accent">
+                See all
+              </AppText>
+            </Pressable>
+          </View>
+
+          {topPros === null ? (
+            <View style={{ gap: space.s4 }}>
+              <Skeleton height={92} radius={radius.lg} />
+              <Skeleton height={92} radius={radius.lg} />
+            </View>
+          ) : topPros.length === 0 ? (
+            <Card>
+              <AppText variant="bodySm" color="textMuted">
+                No workers yet — check back soon, or become the first pro in your parish
+                from your profile.
+              </AppText>
+            </Card>
+          ) : (
+            <View style={{ gap: space.s4 }}>
+              {topPros.map((worker, index) => (
+                <FadeSlideIn key={worker.worker_id} delay={120 + index * 80}>
+                  <WorkerCard
+                    worker={worker}
+                    onPress={() => router.push(`/worker/${worker.worker_id}`)}
+                  />
+                </FadeSlideIn>
+              ))}
+            </View>
+          )}
+
+          {/* Recent bookings */}
+          {recentJobs.length > 0 && (
+            <View style={{ gap: space.s4 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="h3">Recent bookings</AppText>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => router.push('/(tabs)/bookings')}
+                  hitSlop={8}
+                >
+                  <AppText variant="bodySm" color="accent">
+                    View all
+                  </AppText>
+                </Pressable>
+              </View>
+              {recentJobs.map((job) => (
+                <Card key={job.id} onPress={() => router.push(`/job/${job.id}`)}>
+                  <View style={{ gap: space.s2 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: space.s2,
+                      }}
+                    >
+                      <AppText variant="label" style={{ flex: 1 }} numberOfLines={1}>
+                        {job.title}
+                      </AppText>
+                      <StatusPill status={job.status} />
+                    </View>
+                    <AppText variant="caption" color="textMuted">
+                      {formatDateTime(job.requested_at)}
+                      {job.parish ? ` · ${job.parish}` : ''}
+                    </AppText>
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
+        </Stagger>
       </View>
     </Screen>
   );
+}
+
+async function markSuggestionRead(suggestion: AppNotification, then: () => void) {
+  await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', suggestion.id);
+  then();
 }

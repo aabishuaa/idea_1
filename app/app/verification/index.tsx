@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { Stagger } from '@/components/ui/animated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -80,6 +81,7 @@ export default function VerificationScreen() {
   return (
     <Screen>
       <View style={{ gap: space.s5 }}>
+        <Stagger interval={70} gap={space.s5}>
         <Card raised>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
             <Ionicons
@@ -156,6 +158,7 @@ export default function VerificationScreen() {
             </Card>
           ))}
         </View>
+        </Stagger>
       </View>
     </Screen>
   );
