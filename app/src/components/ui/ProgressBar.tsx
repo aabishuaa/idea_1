@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, View } from 'react-native';
 
 import { AppText } from './Text';
 import { useTheme } from '@/theme/ThemeContext';
@@ -16,6 +16,16 @@ interface ProgressBarProps {
 export function ProgressBar({ progress, label, trailing, helper }: ProgressBarProps) {
   const { colors } = useTheme();
   const clamped = Math.min(1, Math.max(0, progress));
+  // Animate the fill toward each new value (width % → non-native driver).
+  const fill = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fill, {
+      toValue: clamped,
+      duration: 650,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [fill, clamped]);
 
   return (
     <View style={{ gap: space.s2 }}>
@@ -39,9 +49,9 @@ export function ProgressBar({ progress, label, trailing, helper }: ProgressBarPr
           overflow: 'hidden',
         }}
       >
-        <View
+        <Animated.View
           style={{
-            width: `${clamped * 100}%`,
+            width: fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
             height: '100%',
             borderRadius: radius.full,
             backgroundColor: colors.accent,

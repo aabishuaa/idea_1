@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { Stagger } from '@/components/ui/animated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -103,6 +104,7 @@ export default function ProfileScreen() {
   return (
     <Screen safeTop>
       <View style={{ gap: space.s6 }}>
+        <Stagger interval={70} gap={space.s6}>
         {/* Identity header */}
         <View style={{ alignItems: 'center', gap: space.s3, paddingTop: space.s4 }}>
           <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
@@ -171,6 +173,7 @@ export default function ProfileScreen() {
             Log out
           </AppText>
         </Pressable>
+        </Stagger>
       </View>
     </Screen>
   );

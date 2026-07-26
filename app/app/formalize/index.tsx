@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { Stagger } from '@/components/ui/animated';
 import { LoadingState } from '@/components/ui/states';
 import { logEvent } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
@@ -75,6 +76,7 @@ export default function FormalizeScreen() {
   return (
     <Screen>
       <View style={{ gap: space.s5 }}>
+        <Stagger interval={70} gap={space.s5}>
         <Card raised>
           <View style={{ gap: space.s3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
@@ -164,6 +166,7 @@ export default function FormalizeScreen() {
             ))}
           </View>
         )}
+        </Stagger>
       </View>
     </Screen>
   );

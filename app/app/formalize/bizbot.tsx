@@ -5,6 +5,7 @@ import { FlatList, Linking, Pressable, View } from 'react-native';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { FadeSlideIn, TypingDots, lightTap } from '@/components/ui/animated';
 import { askBizBot, type ChatTurn, type RagSource } from '@/lib/ai';
 import { logEvent } from '@/lib/events';
 import { useAuth } from '@/providers/AuthProvider';
@@ -44,6 +45,7 @@ export default function BizBotScreen() {
   const ask = async (question: string) => {
     const text = question.trim();
     if (!text || busy) return;
+    lightTap();
     setDraft('');
     setBusy(true);
 
@@ -51,7 +53,7 @@ export default function BizBotScreen() {
     const pendingMessage: BotMessage = {
       id: `p-${Date.now()}`,
       role: 'assistant',
-      content: 'Checking the official sources…',
+      content: '',
       pending: true,
     };
     setMessages((current) => [...current, userMessage, pendingMessage]);
@@ -98,7 +100,7 @@ export default function BizBotScreen() {
         renderItem={({ item }) => {
           const mine = item.role === 'user';
           return (
-            <View style={{ gap: space.s2 }}>
+            <FadeSlideIn from={mine ? 'right' : 'left'} distance={12} duration={260} style={{ gap: space.s2 }}>
               <View
                 style={{
                   alignSelf: mine ? 'flex-end' : 'flex-start',
@@ -107,14 +109,19 @@ export default function BizBotScreen() {
                   borderWidth: mine ? 0 : 1,
                   borderColor: colors.border,
                   borderRadius: radius.lg,
+                  borderBottomLeftRadius: mine ? radius.lg : radius.sm,
+                  borderBottomRightRadius: mine ? radius.sm : radius.lg,
                   paddingHorizontal: space.s3,
-                  paddingVertical: space.s2,
-                  opacity: item.pending ? 0.6 : 1,
+                  paddingVertical: item.pending ? space.s3 : space.s2,
                 }}
               >
-                <AppText variant="bodySm" style={{ color: mine ? '#FFFFFF' : colors.text }}>
-                  {item.content}
-                </AppText>
+                {item.pending ? (
+                  <TypingDots />
+                ) : (
+                  <AppText variant="bodySm" style={{ color: mine ? '#FFFFFF' : colors.text }}>
+                    {item.content}
+                  </AppText>
+                )}
               </View>
               {item.sources && item.sources.length > 0 && (
                 <View style={{ gap: space.s1, paddingLeft: space.s2 }}>
@@ -136,7 +143,7 @@ export default function BizBotScreen() {
                   ))}
                 </View>
               )}
-            </View>
+            </FadeSlideIn>
           );
         }}
         ListFooterComponent={

@@ -34,6 +34,7 @@ function RootStack() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="worker/[id]" options={{ title: 'Profile' }} />
         <Stack.Screen name="job/new" options={{ title: 'Request a job' }} />
         <Stack.Screen name="job/[id]" options={{ title: 'Booking' }} />
