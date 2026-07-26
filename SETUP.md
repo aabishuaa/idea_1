@@ -184,9 +184,20 @@ still runs; push registration is skipped with a console notice.
 
 ## 4. Demo data
 
-- **Local stack:** `supabase db reset` loads `supabase/seed.sql` — demo workers
-  (electrician/plumber/carpenter in Kingston, Spanish Town, Montego Bay), jobs, reviews,
-  and computed reputation scores.
+- **Local stack:** `supabase db reset` loads `supabase/seed.sql` — 12 demo workers
+  across 8 trades and 7 parishes, 20 completed jobs with reviews (reputation and
+  Top Pro tier computed by the triggers), live bookings in every status, chats with
+  unread messages, a formalization journey in two states (suggested + active), and
+  verification records. Demo logins (password for all: `myb-demo-123`):
+
+  | Account | Role | What it demos |
+  | --- | --- | --- |
+  | `andre@demo.myb` | Customer | Rich home: bookings (pending/confirmed/in-progress), unread chats |
+  | `brown@demo.myb` | Customer | Second reviewer account |
+  | `marcus@demo.myb` | Electrician | Top Pro, 4.8★, formalization auto-suggest card |
+  | `sasha@demo.myb` | Plumber | Verified, formalization pathway active (2/8 steps) |
+  | `devon@demo.myb` | Carpenter | Unverified — shows the "Verify your identity" flow |
+
 - **Hosted project:** auth users can't be safely seeded by SQL. Create 2–3 accounts
   through the app's sign-up flow, make one a worker, then (optionally) run
   `supabase/seed_hosted_helpers.sql` in the SQL Editor to promote them into rich demo
