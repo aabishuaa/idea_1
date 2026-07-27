@@ -26,8 +26,16 @@
 --
 -- NOTE: service_descriptions.embedding stays NULL here (no LLM key in seed).
 -- Run the embed-text function per service, or the ai-service ingest script,
--- to enable semantic ranking locally. Matching still works via filters.
--- Hosted demo projects: see seed_hosted_helpers.sql (SETUP.md §4).
+-- to enable semantic ranking. Matching still works via filters without it.
+
+-- Hosted Supabase installs pgcrypto/postgis into the `extensions` schema;
+-- a local stack puts them in `public`. Cover both so crypt()/st_makepoint()
+-- resolve either way (a schema that does not exist is ignored).
+set search_path = public, extensions;
+
+-- The seed inserts ~640 jobs and reviews, each firing the reputation
+-- triggers. Raise the timeout so the SQL Editor does not cut it off.
+set statement_timeout = '600s';
 
 -- ── Demo auth users ─────────────────────────────────────────────────────────
 insert into auth.users
