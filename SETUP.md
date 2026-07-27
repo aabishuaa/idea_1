@@ -182,26 +182,54 @@ still runs; push registration is skipped with a console notice.
 
 ---
 
-## 4. Demo data
+## 4. Demo data — seeding 125 users
 
-- **Local stack:** `supabase db reset` loads `supabase/seed.sql` — 12 demo workers
-  across 8 trades and 7 parishes, 20 completed jobs with reviews (reputation and
-  Top Pro tier computed by the triggers), live bookings in every status, chats with
-  unread messages, a formalization journey in two states (suggested + active), and
-  verification records. Demo logins (password for all: `myb-demo-123`):
+`supabase/seed.sql` populates the whole marketplace: **125 accounts** (113 workers
+across all 12 trades and all 14 parishes, 12 customers), **644 jobs**, **641 reviews**,
+live bookings in every status, chats with unread messages, a formalization journey in
+two states, and verification records. Password for every demo account is
+`myb-demo-123`.
 
-  | Account | Role | What it demos |
-  | --- | --- | --- |
-  | `andre@demo.myb` | Customer | Rich home: bookings (pending/confirmed/in-progress), unread chats |
-  | `brown@demo.myb` | Customer | Second reviewer account |
-  | `marcus@demo.myb` | Electrician | Top Pro, 4.8★, formalization auto-suggest card |
-  | `sasha@demo.myb` | Plumber | Verified, formalization pathway active (2/8 steps) |
-  | `devon@demo.myb` | Carpenter | Unverified — shows the "Verify your identity" flow |
+Ratings, reputation, review counts and Top Pro tiers are **not** hardcoded — the seed
+inserts real jobs and reviews and lets the same SQL triggers the live app uses compute
+them. Running it twice is safe; guarded inserts skip anything already present.
 
-- **Hosted project:** auth users can't be safely seeded by SQL. Create 2–3 accounts
-  through the app's sign-up flow, make one a worker, then (optionally) run
-  `supabase/seed_hosted_helpers.sql` in the SQL Editor to promote them into rich demo
-  profiles — it has clearly-marked variables at the top for the user IDs.
+### Option A — local stack (needs Docker Desktop running)
+
+```bash
+supabase start          # first time only
+supabase db reset       # applies migrations, then loads seed.sql automatically
+```
+
+### Option B — hosted Supabase project (no Docker needed)
+
+1. Apply the schema once: `supabase db push` (or paste each file in
+   `supabase/migrations/` into the SQL Editor in filename order).
+2. Open **Dashboard → SQL Editor → New query**.
+3. Paste the entire contents of `supabase/seed.sql` and press **Run**.
+   It finishes in a couple of seconds and prints how many users it created.
+4. Confirm in **Authentication → Users** — you should see 125 accounts.
+
+> If you'd rather promote your own hand-made accounts instead of seeding a full
+> marketplace, `supabase/seed_hosted_helpers.sql` takes user IDs at the top and turns
+> two existing accounts into a worker + customer pair.
+
+### Key demo logins
+
+| Account | Role | What it demos |
+| --- | --- | --- |
+| `andre@demo.myb` | Customer | Rich home: bookings (pending/confirmed/in-progress), unread chats |
+| `rohan@demo.myb` | Plumber | The mockup's featured pro — 4.8★ (124 reviews), Kingston, Top Pro |
+| `marcus@demo.myb` | Electrician | Top Pro, formalization auto-suggest card |
+| `sasha@demo.myb` | Plumber | Verified, formalization pathway active (2/8 steps) |
+| `devon@demo.myb` | Carpenter | Unverified — shows the "Verify your identity" flow |
+| `worker001…100@demo.myb` | Mixed trades | The bulk population behind search and matching |
+
+### Changing how many users are seeded
+
+The bulk block near the end of `seed.sql` is a plain loop — edit `for i in 1..100`
+(workers) or `for i in 1..10` (customers) and re-seed. Everything else derives from
+the loop counter, so the data stays deterministic and identical for the whole team.
 
 ---
 
