@@ -309,8 +309,8 @@ export default function HomeScreen() {
 
           {topPros === null ? (
             <View style={{ gap: space.s4 }}>
-              <Skeleton height={92} radius={radius.lg} />
-              <Skeleton height={92} radius={radius.lg} />
+              <Skeleton height={128} radius={radius.lg} />
+              <Skeleton height={128} radius={radius.lg} />
             </View>
           ) : topPros.length === 0 ? (
             <Card>

@@ -35,8 +35,8 @@ export default function FavoritesScreen() {
     return (
       <Screen>
         <View style={{ gap: space.s4 }}>
-          <Skeleton height={110} radius={radius.lg} />
-          <Skeleton height={110} radius={radius.lg} />
+          <Skeleton height={128} radius={radius.lg} />
+          <Skeleton height={128} radius={radius.lg} />
         </View>
       </Screen>
     );

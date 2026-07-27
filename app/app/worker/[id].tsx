@@ -68,8 +68,16 @@ export default function WorkerProfileScreen() {
       setFailed(true);
       return;
     }
+    // profileRes can be null if this profile is not readable — render the
+    // worker row rather than crashing on a missing name.
+    const workerRow = workerRes.data as WorkerProfile;
     setDetail({
-      profile: profileRes.data as WorkerDetail['profile'],
+      profile: (profileRes.data as WorkerDetail['profile'] | null) ?? {
+        id: workerRow.user_id,
+        full_name: workerRow.headline || 'myB pro',
+        avatar_url: null,
+        identity_verified: false,
+      },
       worker: workerRes.data as WorkerProfile,
       services: (servicesRes.data as ServiceDescription[] | null) ?? [],
       reviews: (reviewsRes.data as WorkerDetail['reviews'] | null) ?? [],
