@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge, Chip } from '@/components/ui/badges';
@@ -10,10 +11,12 @@ import { Rating } from '@/components/ui/Rating';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { lightTap, successTap } from '@/components/ui/animated';
 import { formatRate, timeAgo } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
-import { space } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeContext';
+import { radius, space } from '@/theme/tokens';
 import type { Profile, Review, ServiceDescription, WorkerProfile } from '@/types/db';
 
 interface WorkerDetail {
@@ -27,8 +30,10 @@ interface WorkerDetail {
 export default function WorkerProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
+  const { colors } = useTheme();
   const [detail, setDetail] = useState<WorkerDetail | null>(null);
   const [failed, setFailed] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -49,21 +54,59 @@ export default function WorkerProfileScreen() {
         .limit(10),
     ]);
 
+    if (session) {
+      const { data: favorite } = await supabase
+        .from('favorites')
+        .select('worker_id')
+        .eq('user_id', session.user.id)
+        .eq('worker_id', id)
+        .maybeSingle();
+      setSaved(favorite != null);
+    }
+
     if (!workerRes.data) {
       setFailed(true);
       return;
     }
+    // profileRes can be null if this profile is not readable — render the
+    // worker row rather than crashing on a missing name.
+    const workerRow = workerRes.data as WorkerProfile;
     setDetail({
-      profile: profileRes.data as WorkerDetail['profile'],
+      profile: (profileRes.data as WorkerDetail['profile'] | null) ?? {
+        id: workerRow.user_id,
+        full_name: workerRow.headline || 'myB pro',
+        avatar_url: null,
+        identity_verified: false,
+      },
       worker: workerRes.data as WorkerProfile,
       services: (servicesRes.data as ServiceDescription[] | null) ?? [],
       reviews: (reviewsRes.data as WorkerDetail['reviews'] | null) ?? [],
     });
+    // session intentionally omitted: the favourite state reloads on toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Save / unsave this pro (FR-DISC-8). */
+  const toggleSaved = async () => {
+    if (!session || !id) return;
+    if (saved) {
+      lightTap();
+      setSaved(false);
+      await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('worker_id', id);
+    } else {
+      successTap();
+      setSaved(true);
+      await supabase.from('favorites').insert({ user_id: session.user.id, worker_id: id });
+    }
+  };
 
   if (failed) {
     return (
@@ -93,6 +136,35 @@ export default function WorkerProfileScreen() {
     <Screen>
       <View style={{ gap: space.s5 }}>
         <View style={{ alignItems: 'center', gap: space.s3 }}>
+          {!isSelf && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={saved ? 'Remove from favourites' : 'Save to favourites'}
+              accessibilityState={{ selected: saved }}
+              onPress={() => void toggleSaved()}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                width: 40,
+                height: 40,
+                borderRadius: radius.full,
+                borderWidth: 1,
+                borderColor: saved ? colors.error : colors.border,
+                backgroundColor: saved ? colors.errorSoft : colors.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons
+                name={saved ? 'heart' : 'heart-outline'}
+                size={20}
+                color={saved ? colors.error : colors.textMuted}
+              />
+            </Pressable>
+          )}
           <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
           <View style={{ alignItems: 'center', gap: space.s1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>

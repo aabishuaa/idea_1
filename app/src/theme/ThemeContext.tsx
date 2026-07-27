@@ -26,7 +26,10 @@ const STORAGE_KEY = 'myb.theme-preference';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  // myB is a dark-first product (every mockup is dark), so dark is the
+  // default rather than following the device. Settings offers light and
+  // "follow system" for anyone who wants them.
+  const [preference, setPreferenceState] = useState<ThemePreference>('dark');
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {

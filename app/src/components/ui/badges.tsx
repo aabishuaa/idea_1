@@ -42,7 +42,12 @@ export function StatusPill({ status }: { status: JobStatus }) {
 
 type BadgeKind = 'topPro' | 'verified' | 'new' | 'pro';
 
-export function Badge({ kind }: { kind: BadgeKind }) {
+/**
+ * Trust badge. `compact` drops the label and keeps just the icon — used in
+ * dense lists so a long name plus two badges can never wrap and change the
+ * height of one card relative to its neighbours.
+ */
+export function Badge({ kind, compact = false }: { kind: BadgeKind; compact?: boolean }) {
   const { colors } = useTheme();
   const config: Record<
     BadgeKind,
@@ -59,6 +64,31 @@ export function Badge({ kind }: { kind: BadgeKind }) {
     pro: { label: 'PRO', bg: colors.accentSoft, fg: colors.accent },
   };
   const { label, icon, bg, fg } = config[kind];
+
+  if (compact) {
+    return (
+      <View
+        accessibilityLabel={label}
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: radius.full,
+          backgroundColor: bg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {icon ? (
+          <Ionicons name={icon} size={12} color={fg} />
+        ) : (
+          <AppText variant="caption" style={{ color: fg, fontSize: 9 }}>
+            {label.slice(0, 1)}
+          </AppText>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View
       style={{

@@ -77,7 +77,7 @@ export default function NewJobScreen() {
 
     if (!params.workerId) {
       // No worker picked: send them to matching with this description prefilled.
-      router.replace({ pathname: '/(tabs)/search', params: { q: description.trim() } });
+      router.replace({ pathname: '/search', params: { q: description.trim() } });
       return;
     }
 

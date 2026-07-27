@@ -1,21 +1,41 @@
 -- MyB — demo seed (loaded by `supabase db reset`; never run against prod).
--- Creates demo accounts (password for all: myb-demo-123), a full cast of
--- workers across trades/parishes, jobs in every lifecycle state, reviews
--- (which trigger reputation computation), chats, notifications and
--- formalization/verification state — so every screen has real content on
+--
+-- Seeds 125 accounts (password for all: myb-demo-123): 113 workers across all
+-- 12 trades and all 14 parishes, 644 jobs, 641 reviews, chats, notifications,
+-- and formalization/verification state — so every screen has real content on
 -- first boot.
+--
+-- HOW TO RUN (see SETUP.md §4):
+--   Local stack : `supabase db reset` (loads this file automatically)
+--   Hosted proj : paste this whole file into the SQL Editor and Run
+--                 (after `supabase db push` has applied the migrations)
+-- Safe to run twice: guarded inserts skip work that already exists.
+--
+-- Ratings, review counts, reputation and Top Pro tiers are NEVER written
+-- directly — they are computed by the same SQL triggers the live app uses,
+-- from the jobs and reviews inserted here.
 --
 -- Demo logins (password: myb-demo-123):
 --   andre@demo.myb   — customer (the demo persona; richest customer view)
 --   brown@demo.myb   — customer
+--   rohan@demo.myb   — the featured pro from the mockups: 4.8 ★ (124), Kingston
 --   marcus@demo.myb  — electrician, Top Pro, formalization suggested
 --   sasha@demo.myb   — plumber, verified, formalization active
 --   devon@demo.myb   — carpenter (unverified — shows the verification CTA)
+--   worker001..100@demo.myb / customer01..10@demo.myb — the bulk population
 --
 -- NOTE: service_descriptions.embedding stays NULL here (no LLM key in seed).
 -- Run the embed-text function per service, or the ai-service ingest script,
--- to enable semantic ranking locally. Matching still works via filters.
--- Hosted demo projects: see seed_hosted_helpers.sql (SETUP.md §4).
+-- to enable semantic ranking. Matching still works via filters without it.
+
+-- Hosted Supabase installs pgcrypto/postgis into the `extensions` schema;
+-- a local stack puts them in `public`. Cover both so crypt()/st_makepoint()
+-- resolve either way (a schema that does not exist is ignored).
+set search_path = public, extensions;
+
+-- The seed inserts ~640 jobs and reviews, each firing the reputation
+-- triggers. Raise the timeout so the SQL Editor does not cut it off.
+set statement_timeout = '600s';
 
 -- ── Demo auth users ─────────────────────────────────────────────────────────
 insert into auth.users
@@ -45,7 +65,8 @@ from (values
   ('12', 'ricardo@demo.myb', 'Ricardo Bailey'),
   ('13', 'jerome@demo.myb',  'Jerome Clarke'),
   ('14', 'camille@demo.myb', 'Camille Roberts')
-) as demo (num, email, full_name);
+) as demo (num, email, full_name)
+on conflict (id) do nothing;
 
 insert into auth.identities
   (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
@@ -53,7 +74,8 @@ select gen_random_uuid(), u.id, u.id::text,
        jsonb_build_object('sub', u.id::text, 'email', u.email),
        'email', now(), now(), now()
   from auth.users u
- where u.email like '%@demo.myb';
+ where u.email like '%@demo.myb'
+   and not exists (select 1 from auth.identities ai where ai.user_id = u.id);
 
 -- Profiles were auto-created by the handle_new_user trigger; enrich them.
 -- Customers.
@@ -152,7 +174,8 @@ values
    'Welder & fabricator — grills, gates, rails',
    'Custom window grills, gates, stair rails and trailer repair. Mobile welding available islandwide.',
    'Kingston', st_setsrid(st_makepoint(-76.8000, 17.9750), 4326)::geography,
-   8, 5000, 8000, 'job', true);
+   8, 5000, 8000, 'job', true)
+on conflict (user_id) do nothing;
 
 insert into public.service_descriptions (user_id, trade_slug, title, description) values
   ('00000000-0000-4000-8000-000000000001', 'electrical', 'Wiring & rewiring',
@@ -317,7 +340,8 @@ values
    '00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000001',
    'Rewire kitchen outlets', 'Add two double sockets over the counter.', 'electrical', 'St. Andrew',
    'normal', 'in_progress', now() - interval '3 days', now() - interval '3 days' + interval '1 hour',
-   now() - interval '1 day', null, 15000);
+   now() - interval '1 day', null, 15000)
+on conflict (id) do nothing;
 
 insert into public.reviews (job_id, worker_id, reviewer_id, rating, comment) values
   ('10000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001',
@@ -359,7 +383,8 @@ insert into public.reviews (job_id, worker_id, reviewer_id, rating, comment) val
   ('10000000-0000-4000-8000-000000000019', '00000000-0000-4000-8000-000000000013',
    '00000000-0000-4000-8000-000000000004', 4, 'Machine spinning again. Part took a day to source.'),
   ('10000000-0000-4000-8000-000000000020', '00000000-0000-4000-8000-000000000014',
-   '00000000-0000-4000-8000-000000000005', 5, 'Grills look excellent and fit perfectly. True professional.');
+   '00000000-0000-4000-8000-000000000005', 5, 'Grills look excellent and fit perfectly. True professional.')
+on conflict (job_id) do nothing;
 
 -- ── Chats ───────────────────────────────────────────────────────────────────
 insert into public.threads (id, customer_id, worker_id, job_id) values
@@ -371,7 +396,8 @@ insert into public.threads (id, customer_id, worker_id, job_id) values
    '10000000-0000-4000-8000-000000000021'),
   ('20000000-0000-4000-8000-000000000003',
    '00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000006',
-   '10000000-0000-4000-8000-000000000022');
+   '10000000-0000-4000-8000-000000000022')
+on conflict (id) do nothing;
 
 insert into public.messages (thread_id, sender_id, body, created_at) values
   ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000004',
@@ -404,17 +430,378 @@ insert into public.notifications (user_id, type, title, body, data) values
 -- ── Formalization state ─────────────────────────────────────────────────────
 -- Marcus: suggested (auto-trigger fired, waiting on his confirmation).
 insert into public.formalization_progress (user_id, status, suggested_at, activation_mode)
-values ('00000000-0000-4000-8000-000000000001', 'suggested', now() - interval '1 day', 'auto_suggested');
+values ('00000000-0000-4000-8000-000000000001', 'suggested', now() - interval '1 day', 'auto_suggested')
+on conflict (user_id) do nothing;
 
 -- Sasha: opted in manually, two steps done already.
 insert into public.formalization_progress
   (user_id, status, activated_at, activation_mode, readiness_score, answers)
 values ('00000000-0000-4000-8000-000000000002', 'active', now() - interval '10 days', 'manual', 11,
-        '{"1":"Yes","2":"Yes","3":"Sometimes","4":"More than 2 years","5":"Thinking about it","6":"Yes","7":"Yes","8":"Sometimes"}');
+        '{"1":"Yes","2":"Yes","3":"Sometimes","4":"More than 2 years","5":"Thinking about it","6":"Yes","7":"Yes","8":"Sometimes"}')
+on conflict (user_id) do nothing;
 
 insert into public.checklist_progress (user_id, item_id, done, done_at) values
   ('00000000-0000-4000-8000-000000000002', 1, true, now() - interval '8 days'),
-  ('00000000-0000-4000-8000-000000000002', 2, true, now() - interval '5 days');
+  ('00000000-0000-4000-8000-000000000002', 2, true, now() - interval '5 days')
+on conflict (user_id, item_id) do nothing;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BULK DEMO POPULATION — 100 workers + 10 customers, generated deterministically
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Everything below is derived from the loop counter (no random()), so the same
+-- data appears on every machine. Reputation, ratings and job counts are NOT
+-- written directly — they come out of the same triggers the live app uses, by
+-- inserting real jobs and reviews.
+-- Safe to re-run: the guard skips the whole block if it already ran.
+
+do $$
+declare
+  v_first text[] := array[
+    'Andre','Kemar','Shanice','Rohan','Tashana','Delroy','Oneil','Shantel','Damion','Kimberly',
+    'Rayon','Alicia','Everton','Georgia','Jermaine','Latoya','Kirk','Novia','Dwight','Simone',
+    'Courtney','Racquel','Fabian','Yanique','Garfield','Sanya','Leroy','Chevonne','Winston','Paula',
+    'Marlon','Kadian','Trevor','Ainsley','Denise','Horace','Michelle','Clive','Judith','Rohan'];
+  v_last text[] := array[
+    'Brown','Campbell','Williams','Grant','Palmer','Reid','Bailey','Clarke','Morris','Simpson',
+    'Roberts','Lewis','Chen','Thompson','Walker','Henry','Gordon','Facey','McKenzie','Blake',
+    'Sinclair','Dixon','Wright','Barrett','Ellis'];
+  v_trades text[] := array[
+    'plumbing','electrical','carpentry','painting','masonry','tiling',
+    'welding','mechanics','appliance-repair','landscaping','ac-refrigeration','roofing'];
+  v_headline text[] := array[
+    'Plumber — leaks, installs & repairs',
+    'Electrician — wiring, fixtures & faults',
+    'Carpenter — furniture, doors & framing',
+    'Painter — interiors, exteriors & finishes',
+    'Mason — walls, steps & foundations',
+    'Tiler — floors, bathrooms & backsplashes',
+    'Welder — grills, gates & rails',
+    'Auto mechanic — servicing & diagnostics',
+    'Appliance repair — washers, stoves & fridges',
+    'Landscaper — gardens, lawns & tree work',
+    'AC & refrigeration technician',
+    'Roofer — repairs, sheeting & guttering'];
+  v_service_title text[] := array[
+    'Leak repair & pipe work','Wiring & electrical repairs','Custom furniture & repairs',
+    'Interior & exterior painting','Block work & foundations','Floor & bathroom tiling',
+    'Grills, gates & rails','Servicing & diagnostics','Washer & stove repair',
+    'Garden & lawn care','AC install & servicing','Roof repair & replacement'];
+  v_service_desc text[] := array[
+    'Fixing leaking pipes, dripping taps, sinks and toilets, burst pipe emergency repair, water pump installation, low water pressure.',
+    'House wiring, rewiring, breaker panels, outlets and switches, fault finding, ceiling fans, security lights.',
+    'Custom cabinets, beds, doors, window frames, roof framing, furniture repair and refinishing.',
+    'Room painting, exterior walls, gates and grills, skim coating, decorative finishes, colour advice.',
+    'Block work, retaining walls, house foundations, concrete steps, plastering and decorative stonework.',
+    'Bathroom walls and floors, kitchen backsplash, veranda and living room tiles, regrouting and repair.',
+    'Custom window grills, driveway gates, stair and balcony rails, welding repairs, mobile service.',
+    'Full vehicle servicing, oil change, brakes, suspension work, engine diagnostics, pre-purchase inspection.',
+    'Washing machine repair, dryer repair, stove and oven elements, microwave faults, spare parts sourcing.',
+    'Lawn cutting, hedge trimming, tree pruning, garden beds, irrigation setup, weekly yard maintenance.',
+    'Split unit AC installation and servicing, gas top-up, fridge and freezer repair, cold room maintenance.',
+    'Roof leak repair, zinc and shingle replacement, guttering, ridge capping, roof inspection.'];
+  v_job_title text[] := array[
+    'Fix leaking pipe','Replace light fixtures','Build kitchen cabinets','Paint two bedrooms',
+    'Build boundary wall','Tile bathroom floor','Weld window grills','Full car service',
+    'Repair washing machine','Yard cleanup & trim','Service AC unit','Repair roof leak'];
+  v_comment text[] := array[
+    'Excellent work, arrived on time and cleaned up after.',
+    'Very professional and fair with the price. Would hire again.',
+    'Did the job properly and explained everything clearly.',
+    'Good work overall, took a little longer than expected.',
+    'Solid job. Communicated well throughout.',
+    'Quick response and quality finish. Recommended.',
+    'Honest about what was needed — no upselling.',
+    'Neat work and reasonable rate. Happy with it.'];
+  v_parishes text[] := array[
+    'Kingston','St. Andrew','St. Catherine','St. James','Manchester','Clarendon','St. Ann',
+    'Portland','St. Thomas','St. Mary','Trelawny','Hanover','Westmoreland','St. Elizabeth'];
+
+  v_customers uuid[] := '{}';
+  v_worker    uuid;
+  v_customer  uuid;
+  v_job       uuid;
+  v_trade_ix  int;
+  v_trade     text;
+  v_parish    text;
+  v_location  geography;
+  v_unit      text;
+  v_rate      numeric;
+  v_jobs      int;
+  v_rating    int;
+  v_days      int;
+  i int;
+  k int;
+begin
+  if exists (select 1 from auth.users where email like 'worker0%@demo.myb') then
+    raise notice 'Bulk demo users already present — skipping generation.';
+    return;
+  end if;
+
+  -- ── 10 generated customers ────────────────────────────────────────────────
+  for i in 1..10 loop
+    v_customer := ('00000000-0000-4000-a000-' || lpad(i::text, 12, '0'))::uuid;
+
+    insert into auth.users
+      (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+       raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+       confirmation_token, recovery_token, email_change, email_change_token_new)
+    values
+      ('00000000-0000-0000-0000-000000000000', v_customer, 'authenticated', 'authenticated',
+       'customer' || lpad(i::text, 2, '0') || '@demo.myb',
+       crypt('myb-demo-123', gen_salt('bf')), now(),
+       '{"provider":"email","providers":["email"]}',
+       jsonb_build_object('full_name',
+         v_first[1 + ((i * 5) % array_length(v_first, 1))] || ' ' ||
+         v_last[1 + ((i * 3) % array_length(v_last, 1))]),
+       now(), now(), '', '', '', '');
+
+    update public.profiles
+       set is_customer = true,
+           parish = v_parishes[1 + (i % array_length(v_parishes, 1))]
+     where id = v_customer;
+
+    v_customers := v_customers || v_customer;
+  end loop;
+
+  -- ── 100 generated workers ─────────────────────────────────────────────────
+  for i in 1..100 loop
+    v_worker := ('00000000-0000-4000-9000-' || lpad(i::text, 12, '0'))::uuid;
+    v_trade_ix := 1 + (i % array_length(v_trades, 1));
+    v_trade := v_trades[v_trade_ix];
+    v_parish := v_parishes[1 + (i % array_length(v_parishes, 1))];
+
+    insert into auth.users
+      (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+       raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+       confirmation_token, recovery_token, email_change, email_change_token_new)
+    values
+      ('00000000-0000-0000-0000-000000000000', v_worker, 'authenticated', 'authenticated',
+       'worker' || lpad(i::text, 3, '0') || '@demo.myb',
+       crypt('myb-demo-123', gen_salt('bf')), now(),
+       '{"provider":"email","providers":["email"]}',
+       jsonb_build_object('full_name',
+         v_first[1 + (i % array_length(v_first, 1))] || ' ' ||
+         v_last[1 + ((i * 7) % array_length(v_last, 1))]),
+       now(), now(), '', '', '', '');
+
+    -- ~2 in 3 verified, so the app shows both verified and unverified pros.
+    update public.profiles
+       set is_worker = true,
+           parish = v_parish,
+           identity_verified = (i % 3) <> 0
+     where id = v_worker;
+
+    -- Position: parish centroid, nudged so pros spread out on the map.
+    select st_setsrid(
+             st_makepoint(
+               st_x(p.centroid::geometry) + (((i % 7) - 3) * 0.012),
+               st_y(p.centroid::geometry) + (((i % 5) - 2) * 0.012)),
+             4326)::geography
+      into v_location
+      from public.parishes p
+     where p.country = 'JM' and p.name = v_parish;
+
+    v_unit := case
+                when v_trade in ('painting', 'masonry', 'landscaping') then 'day'
+                when v_trade in ('mechanics', 'ac-refrigeration', 'appliance-repair', 'welding')
+                  then 'job'
+                else 'hour'
+              end;
+    v_rate := case v_unit
+                when 'hour' then 2000 + (i % 9) * 250
+                when 'day'  then 10000 + (i % 8) * 1500
+                else 3500 + (i % 10) * 500
+              end;
+
+    insert into public.worker_profiles
+      (user_id, headline, bio, parish, location, years_experience,
+       rate_min_jmd, rate_max_jmd, rate_unit, available)
+    values
+      (v_worker, v_headline[v_trade_ix],
+       v_service_desc[v_trade_ix] || ' Based in ' || v_parish ||
+         ', serving surrounding communities.',
+       v_parish, v_location, 1 + (i % 18),
+       v_rate, v_rate + (i % 4) * 250, v_unit, (i % 8) <> 0);
+
+    insert into public.service_descriptions (user_id, trade_slug, title, description)
+    values (v_worker, v_trade, v_service_title[v_trade_ix], v_service_desc[v_trade_ix]);
+
+    -- 1–9 completed jobs each, every one reviewed. The reviews/jobs triggers
+    -- compute reputation, rating_avg and jobs_completed from these rows.
+    v_jobs := 1 + (i % 9);
+    for k in 1..v_jobs loop
+      v_job := gen_random_uuid();
+      v_customer := v_customers[1 + ((i + k) % 10)];
+      v_days := 5 + ((i * 3 + k * 7) % 85);
+
+      insert into public.jobs
+        (id, customer_id, worker_id, title, description, trade_slug, parish, urgency,
+         status, requested_at, responded_at, started_at, completed_at, agreed_price_jmd)
+      values
+        (v_job, v_customer, v_worker, v_job_title[v_trade_ix],
+         'Demo job seeded for ' || v_trade || ' in ' || v_parish || '.',
+         v_trade, v_parish,
+         (array['low', 'normal', 'normal', 'high'])[1 + ((i + k) % 4)]::public.job_urgency,
+         'completed',
+         now() - (v_days || ' days')::interval,
+         now() - (v_days || ' days')::interval + interval '2 hours',
+         now() - ((v_days - 1) || ' days')::interval,
+         now() - ((v_days - 2) || ' days')::interval,
+         v_rate * (1 + (k % 3)));
+
+      -- Mostly 4–5★ with the occasional 3★, so rankings differ believably.
+      v_rating := case
+                    when (i + k) % 11 = 0 then 3
+                    when (i + k) % 4 = 0 then 4
+                    else 5
+                  end;
+
+      insert into public.reviews (job_id, worker_id, reviewer_id, rating, comment)
+      values (v_job, v_worker, v_customer, v_rating,
+              v_comment[1 + ((i + k) % array_length(v_comment, 1))]);
+    end loop;
+  end loop;
+
+  raise notice 'Seeded 100 demo workers + 10 demo customers.';
+end $$;
+
+-- ── Rohan Williams — the featured pro from the design mockups ───────────────
+-- "Rohan Williams · Plumbing Specialist · 4.8 (124) · Kingston · Top Pro".
+-- His 124 completed jobs and reviews are inserted for real, so the rating,
+-- review count and reputation on screen are all trigger-computed.
+insert into auth.users
+  (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+   confirmation_token, recovery_token, email_change, email_change_token_new)
+values
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-8000-000000000015',
+   'authenticated', 'authenticated', 'rohan@demo.myb',
+   crypt('myb-demo-123', gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Rohan Williams"}',
+   now(), now(), '', '', '', '')
+on conflict (id) do nothing;
+
+update public.profiles
+   set is_worker = true, parish = 'Kingston', identity_verified = true
+ where id = '00000000-0000-4000-8000-000000000015';
+
+insert into public.worker_profiles
+  (user_id, headline, bio, parish, location, years_experience,
+   rate_min_jmd, rate_max_jmd, rate_unit, available)
+values
+  ('00000000-0000-4000-8000-000000000015',
+   'Plumbing Specialist',
+   'Kingston''s go-to plumber for over a decade — leak repair, pipe fitting, bathroom and kitchen installs. Same-day emergency callouts across the corporate area.',
+   'Kingston', st_setsrid(st_makepoint(-76.7920, 17.9770), 4326)::geography,
+   12, 3500, 4500, 'hour', true)
+on conflict (user_id) do nothing;
+
+insert into public.service_descriptions (user_id, trade_slug, title, description)
+select '00000000-0000-4000-8000-000000000015', 'plumbing', title, description
+  from (values
+    ('Leak repair', 'Emergency leak repair, burst pipes, dripping taps, running toilets, water damage prevention.'),
+    ('Pipe fitting', 'New pipe runs, repiping old houses, water tank and pump connections, PVC and copper fitting.'),
+    ('Bathroom & kitchen installs', 'Sink, toilet, shower and bathtub installation, kitchen plumbing, solar water heater hookup.')
+  ) as s (title, description)
+ where not exists (
+   select 1 from public.service_descriptions
+    where user_id = '00000000-0000-4000-8000-000000000015');
+
+do $$
+declare
+  v_rohan uuid := '00000000-0000-4000-8000-000000000015';
+  v_customers uuid[];
+  v_job uuid;
+  v_days int;
+  i int;
+begin
+  if (select count(*) from public.jobs where worker_id = v_rohan) > 0 then
+    raise notice 'Rohan already has job history — skipping.';
+    return;
+  end if;
+
+  select array_agg(id) into v_customers from (
+    select id from public.profiles where is_customer and id <> v_rohan order by id limit 20
+  ) c;
+
+  -- 124 completed + reviewed jobs → rating_avg 4.8, rating_count 124.
+  for i in 1..124 loop
+    v_job := gen_random_uuid();
+    v_days := 10 + (i * 5) % 350;
+
+    insert into public.jobs
+      (id, customer_id, worker_id, title, description, trade_slug, parish, urgency,
+       status, requested_at, responded_at, started_at, completed_at, agreed_price_jmd)
+    values
+      (v_job, v_customers[1 + (i % array_length(v_customers, 1))], v_rohan,
+       (array['Fix leaking pipe', 'Install bathroom sink', 'Unblock kitchen drain',
+              'Replace water heater', 'Repipe bathroom', 'Fix running toilet'])[1 + (i % 6)],
+       'Plumbing work completed in Kingston.', 'plumbing', 'Kingston',
+       (array['low', 'normal', 'normal', 'high'])[1 + (i % 4)]::public.job_urgency,
+       'completed',
+       now() - (v_days || ' days')::interval,
+       now() - (v_days || ' days')::interval + interval '15 minutes',
+       now() - ((v_days - 1) || ' days')::interval,
+       now() - ((v_days - 1) || ' days')::interval,
+       4500 + (i % 8) * 750);
+
+    insert into public.reviews (job_id, worker_id, reviewer_id, rating, comment)
+    values (v_job, v_rohan, v_customers[1 + (i % array_length(v_customers, 1))],
+            case when i % 5 = 0 then 4 else 5 end,
+            (array[
+              'Fast, clean and fairly priced. The best plumber I''ve used.',
+              'Came out same day for an emergency leak. Lifesaver.',
+              'Explained the problem clearly and fixed it properly the first time.',
+              'Very tidy work and no mess left behind. Highly recommend.',
+              'Reliable and professional — my go-to plumber now.'
+            ])[1 + (i % 5)]);
+  end loop;
+
+  raise notice 'Seeded Rohan Williams with 124 completed jobs.';
+end $$;
+
+-- Auth identities for every demo user created above (the named cast already
+-- has theirs; this covers the generated accounts).
+insert into auth.identities
+  (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+select gen_random_uuid(), u.id, u.id::text,
+       jsonb_build_object('sub', u.id::text, 'email', u.email),
+       'email', now(), now(), now()
+  from auth.users u
+ where u.email like '%@demo.myb'
+   and not exists (select 1 from auth.identities ai where ai.user_id = u.id);
+
+-- ── Saved pros + notification history for the demo customer ────────────────
+-- Andre saves the pros he has hired, so Favourites is populated on first open.
+insert into public.favorites (user_id, worker_id, created_at)
+values
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000015', now() - interval '3 days'),
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000002', now() - interval '9 days'),
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000001', now() - interval '20 days'),
+  ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000007', now() - interval '15 days'),
+  ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000015', now() - interval '2 days')
+on conflict (user_id, worker_id) do nothing;
+
+-- A few notifications so the header bell and the notification centre have
+-- something to show (the jobs triggers generate the rest).
+insert into public.notifications (user_id, type, title, body, data, created_at, read_at)
+select '00000000-0000-4000-8000-000000000005', kind::text, title, body, '{}'::jsonb, created_at, read_at
+  from (values
+    ('new_message', 'New message from Sasha King', 'Confirmed for 2 PM tomorrow 👍',
+     now() - interval '30 minutes', null::timestamptz),
+    ('job_status', 'Rohan Williams is on the way',
+     'Your plumber will arrive in about 20 minutes.', now() - interval '4 hours', null),
+    ('new_review', 'How did it go?',
+     'Leave a review for your completed job — it helps the next customer.',
+     now() - interval '2 days', now() - interval '1 day'),
+    ('system', 'Welcome to myB',
+     'Find trusted pros, book in a tap, and keep everything in one place.',
+     now() - interval '20 days', now() - interval '20 days')
+  ) as n (kind, title, body, created_at, read_at)
+ where not exists (
+   select 1 from public.notifications
+    where user_id = '00000000-0000-4000-8000-000000000005'
+      and title = 'Welcome to myB');
 
 -- ── Verification records (verified workers' pipeline history) ───────────────
 insert into public.verification_records
@@ -423,7 +810,8 @@ insert into public.verification_records
 select id, 'verified', now() - interval '60 days', 'v1', now() - interval '60 days',
        true, now() - interval '60 days', 0.8700, true, now() - interval '60 days'
   from public.profiles
- where identity_verified = true;
+ where identity_verified = true
+on conflict (user_id) do nothing;
 
 -- ── Trust tiers ─────────────────────────────────────────────────────────────
 -- Mirror the server rule (0006): skill tier at 5+ jobs and 4.0★+.

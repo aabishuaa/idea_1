@@ -61,7 +61,7 @@ export default function BookingsScreen() {
                 : 'Job requests from customers will show up here.'
             }
             actionTitle={role === 'hiring' ? 'Browse pros' : undefined}
-            onAction={role === 'hiring' ? () => router.push('/(tabs)/search') : undefined}
+            onAction={role === 'hiring' ? () => router.push('/search') : undefined}
           />
         ) : (
           <View style={{ gap: space.s4 }}>

@@ -1,38 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Redirect, Tabs, router } from 'expo-router';
-import React from 'react';
+import { Redirect, Tabs, router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/Text';
 import { ScalePress, lightTap } from '@/components/ui/animated';
 import { usePushRegistration } from '@/hooks/usePushRegistration';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 
 const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: 'home',
-  search: 'search',
   bookings: 'calendar',
+  messages: 'chatbubbles',
   profile: 'person',
 };
 
 const TAB_LABELS: Record<string, string> = {
   index: 'Home',
-  search: 'Search',
   bookings: 'Bookings',
+  messages: 'Messages',
   profile: 'Profile',
 };
 
 /** Mobile tab bar from the design system: 4 tabs + raised center action. */
-function MybTabBar({ state, navigation }: BottomTabBarProps) {
+function MybTabBar({ state, navigation, unread }: BottomTabBarProps & { unread: number }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const renderTab = (routeName: string, index: number) => {
     const focused = state.index === index;
+    const badge = routeName === 'messages' ? unread : 0;
     return (
       <Pressable
         key={routeName}
@@ -45,15 +47,39 @@ function MybTabBar({ state, navigation }: BottomTabBarProps) {
         }}
         style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: space.s2 }}
       >
-        <Ionicons
-          name={
-            focused
-              ? TAB_ICONS[routeName] ?? 'ellipse'
-              : (`${TAB_ICONS[routeName]}-outline` as keyof typeof Ionicons.glyphMap)
-          }
-          size={22}
-          color={focused ? colors.accent : colors.textMuted}
-        />
+        <View>
+          <Ionicons
+            name={
+              focused
+                ? TAB_ICONS[routeName] ?? 'ellipse'
+                : (`${TAB_ICONS[routeName]}-outline` as keyof typeof Ionicons.glyphMap)
+            }
+            size={22}
+            color={focused ? colors.accent : colors.textMuted}
+          />
+          {badge > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -5,
+                right: -9,
+                minWidth: 17,
+                height: 17,
+                borderRadius: 9,
+                paddingHorizontal: 4,
+                backgroundColor: colors.primary,
+                borderWidth: 1.5,
+                borderColor: colors.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <AppText variant="caption" style={{ color: '#FFFFFF', fontSize: 10, lineHeight: 12 }}>
+                {badge > 9 ? '9+' : badge}
+              </AppText>
+            </View>
+          )}
+        </View>
         <AppText variant="caption" style={{ color: focused ? colors.accent : colors.textMuted }}>
           {TAB_LABELS[routeName]}
         </AppText>
@@ -113,18 +139,36 @@ function MybTabBar({ state, navigation }: BottomTabBarProps) {
 
 export default function TabsLayout() {
   const { session, loading } = useAuth();
+  const [unread, setUnread] = useState(0);
   usePushRegistration();
+
+  // Unread message count for the Messages tab badge (mockup shows "2").
+  const loadUnread = useCallback(async () => {
+    if (!session) return;
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null)
+      .neq('sender_id', session.user.id);
+    setUnread(count ?? 0);
+  }, [session]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadUnread();
+    }, [loadUnread]),
+  );
 
   if (!loading && !session) return <Redirect href="/(auth)/onboarding" />;
 
   return (
     <Tabs
-      tabBar={(props) => <MybTabBar {...props} />}
+      tabBar={(props) => <MybTabBar {...props} unread={unread} />}
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="search" />
       <Tabs.Screen name="bookings" />
+      <Tabs.Screen name="messages" />
       <Tabs.Screen name="profile" />
     </Tabs>
   );

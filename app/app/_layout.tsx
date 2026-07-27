@@ -12,7 +12,9 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppDrawer } from '@/components/AppDrawer';
 import { AuthProvider } from '@/providers/AuthProvider';
+import { DrawerProvider } from '@/providers/DrawerProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 
 void SplashScreen.preventAutoHideAsync();
@@ -35,10 +37,14 @@ function RootStack() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="search" options={{ title: 'Find a pro' }} />
+        <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+        <Stack.Screen name="favorites" options={{ title: 'Favourites' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="worker/[id]" options={{ title: 'Profile' }} />
         <Stack.Screen name="job/new" options={{ title: 'Request a job' }} />
         <Stack.Screen name="job/[id]" options={{ title: 'Booking' }} />
-        <Stack.Screen name="messages" options={{ title: 'Messages' }} />
         <Stack.Screen name="thread/[id]" options={{ title: 'Chat' }} />
         <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
         <Stack.Screen name="worker-setup" options={{ title: 'Your worker profile' }} />
@@ -75,7 +81,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <RootStack />
+          <DrawerProvider>
+            <RootStack />
+            {/* Global sidebar — reachable from every screen's ☰ button. */}
+            <AppDrawer />
+          </DrawerProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
