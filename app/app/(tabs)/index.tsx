@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { CategoryGrid } from '@/components/CategoryGrid';
 import { WorkerCard } from '@/components/WorkerCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
@@ -27,21 +28,13 @@ function greeting(): string {
   return 'Good evening';
 }
 
-/** Line icons per trade (falls back to the emoji from the trades table). */
-const TRADE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  plumbing: 'water',
-  electrical: 'flash',
-  carpentry: 'hammer',
-  painting: 'color-palette',
-  masonry: 'cube',
-  tiling: 'grid',
-  welding: 'flame',
-  mechanics: 'car-sport',
-  'appliance-repair': 'build',
-  landscaping: 'leaf',
-  'ac-refrigeration': 'snow',
-  roofing: 'home',
-};
+/** Shown before the trades table loads (and if it is empty). */
+const FALLBACK_TRADES: Trade[] = [
+  { slug: 'plumbing', label: 'Plumbing', emoji: '🔧' },
+  { slug: 'electrical', label: 'Electrical', emoji: '⚡' },
+  { slug: 'carpentry', label: 'Carpentry', emoji: '🪚' },
+  { slug: 'painting', label: 'Painting', emoji: '🎨' },
+];
 
 /** Home (design 04): greeting, search, categories, top pros, recent bookings. */
 export default function HomeScreen() {
@@ -98,7 +91,6 @@ export default function HomeScreen() {
   );
 
   const firstName = profile?.full_name.split(' ')[0] ?? 'there';
-  const featuredTrades = trades.slice(0, 4);
 
   // Level from the portable reputation score (same rule as Profile).
   const xp = Math.round(Number(workerProfile?.reputation ?? 0) * 10);
@@ -169,52 +161,14 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
-          {/* Category tiles */}
+          {/* Category cards */}
           <View style={{ gap: space.s3 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s3 }}>
-              {(featuredTrades.length > 0
-                ? featuredTrades
-                : [
-                    { slug: 'plumbing', label: 'Plumbing', emoji: '🔧' },
-                    { slug: 'electrical', label: 'Electrical', emoji: '⚡' },
-                    { slug: 'carpentry', label: 'Carpentry', emoji: '🪚' },
-                    { slug: 'painting', label: 'Painting', emoji: '🎨' },
-                  ]
-              ).map((trade) => (
-                <ScalePress
-                  key={trade.slug}
-                  haptic
-                  accessibilityLabel={trade.label}
-                  onPress={() =>
-                    router.push({ pathname: '/(tabs)/search', params: { trade: trade.slug } })
-                  }
-                  style={{ flex: 1 }}
-                >
-                  <View
-                    style={{
-                      aspectRatio: 1,
-                      borderRadius: radius.lg,
-                      backgroundColor: colors.surface,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: space.s1,
-                      paddingHorizontal: 2,
-                    }}
-                  >
-                    {TRADE_ICONS[trade.slug] ? (
-                      <Ionicons name={TRADE_ICONS[trade.slug]} size={24} color={colors.accent} />
-                    ) : (
-                      <AppText variant="h3">{trade.emoji}</AppText>
-                    )}
-                    <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                      {trade.label}
-                    </AppText>
-                  </View>
-                </ScalePress>
-              ))}
-            </View>
+            <CategoryGrid
+              trades={trades.length > 0 ? trades : FALLBACK_TRADES}
+              onSelect={(slug) =>
+                router.push({ pathname: '/(tabs)/search', params: { trade: slug } })
+              }
+            />
             <Pressable
               accessibilityRole="link"
               onPress={() => router.push('/(tabs)/search')}

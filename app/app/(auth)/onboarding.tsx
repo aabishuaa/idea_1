@@ -297,30 +297,41 @@ export default function OnboardingScreen() {
         style={{
           flexDirection: 'row',
           justifyContent: 'center',
-          gap: space.s2,
+          alignItems: 'center',
           paddingBottom: space.s5,
         }}
       >
-        {SLIDES.map((slide, index) => (
-          <Animated.View
-            key={slide.key}
-            style={{
-              height: 8,
-              borderRadius: radius.full,
-              backgroundColor: colors.accent,
-              width: scrollX.interpolate({
-                inputRange: [(index - 1) * width, index * width, (index + 1) * width],
-                outputRange: [8, 24, 8],
-                extrapolate: 'clamp',
-              }),
-              opacity: scrollX.interpolate({
-                inputRange: [(index - 1) * width, index * width, (index + 1) * width],
-                outputRange: [0.35, 1, 0.35],
-                extrapolate: 'clamp',
-              }),
-            }}
-          />
-        ))}
+        {SLIDES.map((slide, index) => {
+          const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+          return (
+            // The dot grows via scaleX, not width: scrollX drives the native
+            // animated module, which only supports transforms and opacity.
+            <Animated.View
+              key={slide.key}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: radius.full,
+                backgroundColor: colors.accent,
+                marginHorizontal: 4,
+                transform: [
+                  {
+                    scaleX: scrollX.interpolate({
+                      inputRange,
+                      outputRange: [1, 3, 1],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+                opacity: scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.35, 1, 0.35],
+                  extrapolate: 'clamp',
+                }),
+              }}
+            />
+          );
+        })}
       </View>
 
       {/* CTAs */}

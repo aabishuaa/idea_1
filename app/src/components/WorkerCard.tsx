@@ -21,27 +21,31 @@ export function WorkerCard({ worker, onPress }: WorkerCardProps) {
     <Card onPress={onPress}>
       <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'center' }}>
         <Avatar name={worker.full_name} uri={worker.avatar_url} size="lg" />
-        <View style={{ flex: 1, gap: space.s1 }}>
+        <View style={{ flex: 1, gap: space.s1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2, flexWrap: 'wrap' }}>
-            <AppText variant="h3">{worker.full_name}</AppText>
+            <AppText variant="h3" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {worker.full_name}
+            </AppText>
             {worker.tier_skill && <Badge kind="topPro" />}
             {worker.identity_verified && <Badge kind="verified" />}
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
             <Rating value={Number(worker.rating_avg)} />
-            <AppText variant="bodySm" color="textMuted">
-              · {worker.jobs_completed} jobs · {worker.service_title}
+            <AppText variant="bodySm" color="textMuted" numberOfLines={1} style={{ flexShrink: 1 }}>
+              · {worker.jobs_completed} jobs
             </AppText>
           </View>
+          <AppText variant="bodySm" color="textMuted" numberOfLines={1}>
+            {worker.service_title}
+          </AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-            <AppText variant="label" color="accent">
+            <AppText variant="label" color="accent" numberOfLines={1}>
               {formatRate(worker.rate_min_jmd, worker.rate_max_jmd, worker.rate_unit)}
             </AppText>
-            {worker.distance_km != null && (
-              <AppText variant="caption" color="textMuted">
-                {worker.distance_km} km · {worker.parish}
-              </AppText>
-            )}
+            <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {worker.distance_km != null ? `${worker.distance_km} km · ` : ''}
+              {worker.parish}
+            </AppText>
           </View>
         </View>
       </View>
