@@ -60,25 +60,31 @@ export function FadeSlideIn({
     }).start();
   }, [progress, delay, duration]);
 
-  const translate =
+  // A transform array must contain exactly one property per entry — for
+  // from='none' it must be empty, never [{}].
+  const transform =
     from === 'none'
-      ? {}
+      ? []
       : from === 'left' || from === 'right'
-        ? {
-            translateX: progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [from === 'left' ? -distance : distance, 0],
-            }),
-          }
-        : {
-            translateY: progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [from === 'top' ? -distance : distance, 0],
-            }),
-          };
+        ? [
+            {
+              translateX: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [from === 'left' ? -distance : distance, 0],
+              }),
+            },
+          ]
+        : [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [from === 'top' ? -distance : distance, 0],
+              }),
+            },
+          ];
 
   return (
-    <Animated.View style={[{ opacity: progress, transform: [translate as never] }, style]}>
+    <Animated.View style={[{ opacity: progress, transform: transform as never }, style]}>
       {children}
     </Animated.View>
   );
