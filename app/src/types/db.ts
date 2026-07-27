@@ -62,6 +62,14 @@ export interface Trade {
   slug: string;
   label: string;
   emoji: string;
+  /** Grouping for the search screen, e.g. "Beauty & Wellness". */
+  category?: string;
+}
+
+/** get_popular_trades(): categories ranked by real booking demand. */
+export interface PopularTrade extends Trade {
+  category: string;
+  job_count: number;
 }
 
 export interface Job {
@@ -180,6 +188,13 @@ export interface ChecklistStep {
   est_days: number | null;
   done: boolean;
   done_at: string | null;
+  /** Journey stage: identity → register → operate → grow (migration 0015). */
+  stage?: 'identity' | 'register' | 'operate' | 'grow';
+  /** Plain-language payoff for completing this step. */
+  benefit?: string;
+  /** False for steps that are worth doing but not legally required. */
+  required?: boolean;
+  official_url?: string;
 }
 
 export interface QuestionnaireItem {

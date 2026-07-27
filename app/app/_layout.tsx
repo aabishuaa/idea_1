@@ -39,6 +39,7 @@ function RootStack() {
         <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="search" options={{ title: 'Find a pro' }} />
         <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+        <Stack.Screen name="reputation" options={{ title: 'Reputation record' }} />
         <Stack.Screen name="favorites" options={{ title: 'Favourites' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />

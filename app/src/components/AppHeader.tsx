@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from './ui/Text';
 import { lightTap } from './ui/animated';
+import { useAuth } from '@/providers/AuthProvider';
 import { useDrawer } from '@/providers/DrawerProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
@@ -72,6 +73,14 @@ interface AppHeaderProps {
  */
 export function AppHeader({ alerts = 0 }: AppHeaderProps) {
   const { openDrawer } = useDrawer();
+  const { profile } = useAuth();
+
+  // Both roles can coexist (FR-AUTH-2), so name the primary one plainly.
+  const roleLabel = profile?.is_worker
+    ? profile.is_customer
+      ? 'Business owner & customer'
+      : 'Business owner'
+    : 'Customer';
 
   return (
     <View
@@ -84,12 +93,22 @@ export function AppHeader({ alerts = 0 }: AppHeaderProps) {
     >
       <IconButton icon="menu" label="Open menu" onPress={openDrawer} />
 
-      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-        <AppText variant="h2" style={{ letterSpacing: -0.5 }}>
-          myB
-        </AppText>
-        <AppText variant="h2" color="accent">
-          .
+      {/* Wordmark + who you are signed in as — the role has to be obvious. */}
+      <View style={{ alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <AppText variant="h2" style={{ letterSpacing: -0.5 }}>
+            myB
+          </AppText>
+          <AppText variant="h2" color="accent">
+            .
+          </AppText>
+        </View>
+        <AppText
+          variant="caption"
+          color="textMuted"
+          style={{ fontStyle: 'italic', marginTop: -2 }}
+        >
+          {roleLabel}
         </AppText>
       </View>
 

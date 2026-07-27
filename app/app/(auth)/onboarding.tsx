@@ -35,26 +35,34 @@ const TRADE_TILES: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
 function TradesArt({ colors }: { colors: ColorTokens }) {
   return (
     <View
-      style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s3, justifyContent: 'center', maxWidth: 280 }}
+      style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s3, justifyContent: 'center', maxWidth: 300 }}
     >
       {TRADE_TILES.map(({ icon, label }, index) => (
         <FadeSlideIn key={label} delay={150 + index * 90} from="bottom" distance={24}>
           <View
             accessibilityLabel={label}
             style={{
-              width: 76,
-              height: 76,
+              width: 88,
+              height: 84,
               borderRadius: radius.lg,
               backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.border,
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 4,
+              paddingHorizontal: space.s1,
+              gap: 6,
             }}
           >
-            <Ionicons name={icon} size={26} color={colors.accent} />
-            <AppText variant="caption" color="textMuted">
+            <Ionicons name={icon} size={24} color={colors.accent} />
+            {/* Wide enough for "Landscaping" on one line — it was clipping. */}
+            <AppText
+              variant="caption"
+              color="textMuted"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={{ fontSize: 11, textAlign: 'center' }}
+            >
               {label}
             </AppText>
           </View>

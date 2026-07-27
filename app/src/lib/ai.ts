@@ -97,22 +97,37 @@ export interface ChatTurn {
   content: string;
 }
 
+/**
+ * BizBot.
+ *
+ * The Supabase edge function is the primary path: it retrieves from the KB
+ * with Postgres full-text search and generates through Gemini/Groq, so it
+ * needs nothing running locally. The Python AI service is tried only as a
+ * fallback (it adds pgvector semantic retrieval when it is deployed), which
+ * is why BizBot no longer dies when that service is down.
+ */
 export async function askBizBot(
   question: string,
   history: ChatTurn[],
   parish?: string | null,
 ): Promise<RagAnswer> {
-  const headers = await authHeaders();
-  return request<RagAnswer>('/rag/query', {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      question,
-      country: 'JM',
-      parish: parish ?? null,
-      history: history.slice(-6),
-    }),
-  });
+  try {
+    const { askBizBotEdge } = await import('./edge');
+    return await askBizBotEdge(question, history, parish);
+  } catch (edgeError) {
+    if (!env.aiServiceUrl) throw edgeError;
+    const headers = await authHeaders();
+    return request<RagAnswer>('/rag/query', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        country: 'JM',
+        parish: parish ?? null,
+        history: history.slice(-6),
+      }),
+    });
+  }
 }
 
 export async function pingAiService(): Promise<boolean> {
