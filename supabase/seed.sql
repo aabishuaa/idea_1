@@ -771,6 +771,38 @@ select gen_random_uuid(), u.id, u.id::text,
  where u.email like '%@demo.myb'
    and not exists (select 1 from auth.identities ai where ai.user_id = u.id);
 
+-- ── Saved pros + notification history for the demo customer ────────────────
+-- Andre saves the pros he has hired, so Favourites is populated on first open.
+insert into public.favorites (user_id, worker_id, created_at)
+values
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000015', now() - interval '3 days'),
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000002', now() - interval '9 days'),
+  ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000001', now() - interval '20 days'),
+  ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000007', now() - interval '15 days'),
+  ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000015', now() - interval '2 days')
+on conflict (user_id, worker_id) do nothing;
+
+-- A few notifications so the header bell and the notification centre have
+-- something to show (the jobs triggers generate the rest).
+insert into public.notifications (user_id, type, title, body, data, created_at, read_at)
+select '00000000-0000-4000-8000-000000000005', kind::text, title, body, '{}'::jsonb, created_at, read_at
+  from (values
+    ('new_message', 'New message from Sasha King', 'Confirmed for 2 PM tomorrow 👍',
+     now() - interval '30 minutes', null::timestamptz),
+    ('job_status', 'Rohan Williams is on the way',
+     'Your plumber will arrive in about 20 minutes.', now() - interval '4 hours', null),
+    ('new_review', 'How did it go?',
+     'Leave a review for your completed job — it helps the next customer.',
+     now() - interval '2 days', now() - interval '1 day'),
+    ('system', 'Welcome to myB',
+     'Find trusted pros, book in a tap, and keep everything in one place.',
+     now() - interval '20 days', now() - interval '20 days')
+  ) as n (kind, title, body, created_at, read_at)
+ where not exists (
+   select 1 from public.notifications
+    where user_id = '00000000-0000-4000-8000-000000000005'
+      and title = 'Welcome to myB');
+
 -- ── Verification records (verified workers' pipeline history) ───────────────
 insert into public.verification_records
   (user_id, status, consent_given_at, consent_text_version, id_captured_at,

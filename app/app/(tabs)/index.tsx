@@ -4,9 +4,9 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { AppHeader } from '@/components/AppHeader';
 import { CategoryGrid } from '@/components/CategoryGrid';
 import { WorkerCard } from '@/components/WorkerCard';
-import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -45,7 +45,7 @@ export default function HomeScreen() {
   const [suggestion, setSuggestion] = useState<AppNotification | null>(null);
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
-  const [unread, setUnread] = useState(0);
+  const [alerts, setAlerts] = useState(0);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -71,17 +71,17 @@ export default function HomeScreen() {
         ? supabase.from('worker_profiles').select('*').eq('user_id', userId).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase
-        .from('messages')
+        .from('notifications')
         .select('id', { count: 'exact', head: true })
-        .is('read_at', null)
-        .neq('sender_id', userId),
+        .eq('user_id', userId)
+        .is('read_at', null),
     ]);
     setTrades((tradesRes.data as Trade[] | null) ?? []);
     setTopPros((prosRes.data as MatchedWorker[] | null) ?? []);
     setSuggestion((suggestionRes.data as AppNotification | null) ?? null);
     setRecentJobs((jobsRes.data as Job[] | null) ?? []);
     setWorkerProfile((workerRes.data as WorkerProfile | null) ?? null);
-    setUnread(('count' in unreadRes ? unreadRes.count : 0) ?? 0);
+    setAlerts(('count' in unreadRes ? unreadRes.count : 0) ?? 0);
   }, [session, profile?.is_worker]);
 
   useFocusEffect(
@@ -105,57 +105,21 @@ export default function HomeScreen() {
       />
       <View style={{ gap: space.s5 }}>
         <Stagger interval={60} gap={space.s5}>
-          {/* Header */}
-          <View
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <View>
-              <AppText variant="caption" color="textMuted">
-                {greeting()}
-              </AppText>
-              <AppText variant="h2">Hi, {firstName} 👋</AppText>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
-                onPress={() => router.push('/messages')}
-                hitSlop={8}
-              >
-                <Ionicons name="chatbubbles-outline" size={24} color={colors.text} />
-                {unread > 0 && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -6,
-                      minWidth: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: colors.primary,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingHorizontal: 3,
-                    }}
-                  >
-                    <AppText variant="caption" style={{ color: '#FFFFFF', fontSize: 10, lineHeight: 12 }}>
-                      {unread > 9 ? '9+' : unread}
-                    </AppText>
-                  </View>
-                )}
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Your profile"
-                onPress={() => router.push('/(tabs)/profile')}
-              >
-                <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url} size="sm" />
-              </Pressable>
-            </View>
+          {/* App bar: ☰ · myB. · notifications · search */}
+          <AppHeader alerts={alerts} />
+
+          {/* Greeting */}
+          <View style={{ gap: 2 }}>
+            <AppText variant="h2">
+              {greeting()}, {firstName}! 👋
+            </AppText>
+            <AppText variant="bodySm" color="textMuted">
+              Find trusted skilled professionals near you.
+            </AppText>
           </View>
 
           {/* Search */}
-          <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/search')}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/search')}>
             <View pointerEvents="none">
               <Input icon="search" placeholder="What service do you need?" editable={false} />
             </View>
@@ -166,12 +130,12 @@ export default function HomeScreen() {
             <CategoryGrid
               trades={trades.length > 0 ? trades : FALLBACK_TRADES}
               onSelect={(slug) =>
-                router.push({ pathname: '/(tabs)/search', params: { trade: slug } })
+                router.push({ pathname: '/search', params: { trade: slug } })
               }
             />
             <Pressable
               accessibilityRole="link"
-              onPress={() => router.push('/(tabs)/search')}
+              onPress={() => router.push('/search')}
               style={{ alignSelf: 'flex-end' }}
               hitSlop={8}
             >
@@ -224,7 +188,7 @@ export default function HomeScreen() {
             </Card>
           )}
 
-          {/* Worker snapshot: level, and the doors into earnings + BizBot */}
+          {/* Worker snapshot: level + the doors into the dashboard and earnings */}
           {profile?.is_worker && workerProfile && (
             <Card>
               <View style={{ gap: space.s4 }}>
@@ -235,7 +199,7 @@ export default function HomeScreen() {
                   helper={`${workerProfile.jobs_completed} jobs completed · rating ${Number(workerProfile.rating_avg).toFixed(1)}`}
                 />
                 <View style={{ flexDirection: 'row', gap: space.s3 }}>
-                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
+                  <ScalePress haptic onPress={() => router.push('/dashboard')} style={{ flex: 1 }}>
                     <View
                       style={{
                         flexDirection: 'row',
@@ -248,11 +212,11 @@ export default function HomeScreen() {
                         paddingVertical: space.s3,
                       }}
                     >
-                      <Ionicons name="wallet-outline" size={18} color={colors.accent} />
-                      <AppText variant="label">Earnings</AppText>
+                      <Ionicons name="grid-outline" size={18} color={colors.accent} />
+                      <AppText variant="label">Dashboard</AppText>
                     </View>
                   </ScalePress>
-                  <ScalePress haptic onPress={() => router.push('/formalize/bizbot')} style={{ flex: 1 }}>
+                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
                     <View
                       style={{
                         flexDirection: 'row',
@@ -264,9 +228,9 @@ export default function HomeScreen() {
                         paddingVertical: space.s3,
                       }}
                     >
-                      <Ionicons name="sparkles" size={18} color={colors.accent} />
+                      <Ionicons name="wallet-outline" size={18} color={colors.accent} />
                       <AppText variant="label" color="accent">
-                        Ask BizBot
+                        Earnings
                       </AppText>
                     </View>
                   </ScalePress>
@@ -274,6 +238,46 @@ export default function HomeScreen() {
               </View>
             </Card>
           )}
+
+          {/* BizBot — visible to everyone, not just workers with a profile */}
+          <ScalePress haptic onPress={() => router.push('/formalize/bizbot')}>
+            <LinearGradient
+              colors={[colors.primary, colors.accent]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: radius.lg, padding: space.s4 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: radius.md,
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="sparkles" size={22} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label" style={{ color: '#FFFFFF' }}>
+                    Ask BizBot
+                  </AppText>
+                  <AppText
+                    variant="bodySm"
+                    numberOfLines={2}
+                    style={{ color: 'rgba(255,255,255,0.85)' }}
+                  >
+                    {profile?.is_worker
+                      ? '“Do I need a TRN?” · “What is GCT?” — answers from official sources.'
+                      : 'Questions about starting a business in Jamaica? Get plain answers, free.'}
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </ScalePress>
 
           {/* Grow prompt for customers who haven't listed their skills yet */}
           {profile && !profile.is_worker && (
@@ -296,7 +300,7 @@ export default function HomeScreen() {
             style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
           >
             <AppText variant="h3">Top rated professionals</AppText>
-            <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/search')} hitSlop={8}>
+            <Pressable accessibilityRole="link" onPress={() => router.push('/search')} hitSlop={8}>
               <AppText variant="bodySm" color="accent">
                 See all
               </AppText>
