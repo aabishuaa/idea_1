@@ -6,6 +6,7 @@ import { Animated, Easing, Modal, View, useWindowDimensions } from 'react-native
 import { Button } from './Button';
 import { AppText } from './Text';
 import { successTap } from './animated';
+import { playChime } from '@/lib/sound';
 import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
 
@@ -22,6 +23,8 @@ interface SuccessOverlayProps {
   autoDismissMs?: number;
   onDismiss?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  /** Play the signature chime. On for the big moments, off for small ones. */
+  sound?: boolean;
 }
 
 /**
@@ -44,6 +47,7 @@ export function SuccessOverlay({
   autoDismissMs,
   onDismiss,
   icon = 'checkmark',
+  sound = true,
 }: SuccessOverlayProps) {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
@@ -67,6 +71,7 @@ export function SuccessOverlay({
     }
 
     successTap();
+    if (sound) playChime();
     Animated.sequence([
       // 1. Blue floods out from the centre.
       Animated.timing(wash, {
@@ -104,7 +109,7 @@ export function SuccessOverlay({
       const timer = setTimeout(onDismiss, autoDismissMs);
       return () => clearTimeout(timer);
     }
-  }, [visible, wash, tick, ring, copy, autoDismissMs, onDismiss]);
+  }, [visible, sound, wash, tick, ring, copy, autoDismissMs, onDismiss]);
 
   if (!visible) return null;
 
