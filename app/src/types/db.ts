@@ -256,3 +256,12 @@ export interface IncomingRequest {
   customer_avatar: string | null;
   customer_verified: boolean;
 }
+
+/** A work photo on a worker's portfolio (public `portfolios` bucket). */
+export interface PortfolioItem {
+  id: string;
+  user_id: string;
+  storage_path: string;
+  caption: string;
+  created_at: string;
+}
