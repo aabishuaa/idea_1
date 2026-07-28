@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -10,11 +9,11 @@ import { Input } from '@/components/ui/Input';
 import { Rating } from '@/components/ui/Rating';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
-import { LoadingState } from '@/components/ui/states';
+import { ErrorState, LoadingState } from '@/components/ui/states';
+import { SuccessOverlay } from '@/components/ui/SuccessOverlay';
 import { formatDateTime, formatJmd } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
-import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
 import type { Job, JobStatus, Review } from '@/types/db';
 
@@ -27,15 +26,23 @@ interface JobDetail extends Job {
 export default function JobDetailScreen() {
   const { id, confirmed } = useLocalSearchParams<{ id: string; confirmed?: string }>();
   const { session } = useAuth();
-  const { colors } = useTheme();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  // Distinguish "still loading" from "loaded, nothing found" — without this
+  // the screen spun forever whenever the row could not be read.
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'missing'>('loading');
+  const [celebration, setCelebration] = useState<null | 'booked' | 'reviewed' | 'completed'>(
+    confirmed === '1' ? 'booked' : null,
+  );
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setPhase('missing');
+      return;
+    }
     const [jobRes, reviewRes] = await Promise.all([
       supabase
         .from('jobs')
@@ -46,18 +53,33 @@ export default function JobDetailScreen() {
         .maybeSingle(),
       supabase.from('reviews').select('*').eq('job_id', id).maybeSingle(),
     ]);
-    setJob((jobRes.data as JobDetail | null) ?? null);
+    const row = (jobRes.data as JobDetail | null) ?? null;
+    setJob(row);
     setReview((reviewRes.data as Review | null) ?? null);
+    setPhase(row ? 'ready' : 'missing');
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!job) {
+  if (phase === 'loading') {
     return (
       <Screen scroll={false}>
         <LoadingState label="Loading booking…" />
+      </Screen>
+    );
+  }
+
+  if (phase === 'missing' || !job) {
+    return (
+      <Screen scroll={false}>
+        <ErrorState
+          title="Booking not found"
+          message="This booking may have been removed, or it belongs to another account."
+          actionTitle="Back to bookings"
+          onAction={() => router.replace('/(tabs)/bookings')}
+        />
       </Screen>
     );
   }
@@ -69,7 +91,9 @@ export default function JobDetailScreen() {
     setBusy(true);
     const { error } = await supabase.from('jobs').update({ status }).eq('id', job.id);
     setBusy(false);
-    if (!error) void load();
+    if (error) return;
+    if (status === 'completed') setCelebration('completed');
+    void load();
   };
 
   const submitReview = async () => {
@@ -83,34 +107,46 @@ export default function JobDetailScreen() {
       comment: comment.trim(),
     });
     setBusy(false);
-    if (!error) void load();
+    if (error) return;
+    setCelebration('reviewed');
+    void load();
+  };
+
+  const celebrationCopy = {
+    booked: {
+      title: 'Request sent!',
+      message: `${job.worker?.full_name ?? 'The pro'} will confirm shortly. We'll notify you as soon as they respond.`,
+      icon: 'checkmark' as const,
+    },
+    completed: {
+      title: 'Job completed',
+      message: 'Nice work. This job now counts towards your reputation record.',
+      icon: 'trophy' as const,
+    },
+    reviewed: {
+      title: 'Thanks for the review',
+      message: 'Your rating helps the next customer choose with confidence.',
+      icon: 'star' as const,
+    },
   };
 
   return (
     <Screen>
+      {celebration && (
+        <SuccessOverlay
+          visible
+          icon={celebrationCopy[celebration].icon}
+          title={celebrationCopy[celebration].title}
+          message={celebrationCopy[celebration].message}
+          actionTitle="View booking"
+          onAction={() => setCelebration(null)}
+          secondaryTitle={celebration === 'booked' ? 'Back to home' : undefined}
+          onSecondary={
+            celebration === 'booked' ? () => router.replace('/(tabs)') : undefined
+          }
+        />
+      )}
       <View style={{ gap: space.s5 }}>
-        {/* Confirmation banner (design 07) */}
-        {confirmed === '1' && job.status === 'requested' && (
-          <View style={{ alignItems: 'center', gap: space.s3, paddingVertical: space.s4 }}>
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 36,
-                backgroundColor: colors.successSoft,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="checkmark" size={36} color={colors.success} />
-            </View>
-            <AppText variant="h2">Request sent!</AppText>
-            <AppText variant="bodySm" color="textMuted" style={{ textAlign: 'center' }}>
-              {job.worker?.full_name ?? 'The pro'} will confirm shortly. We&apos;ll notify you
-              as soon as they respond.
-            </AppText>
-          </View>
-        )}
 
         <Card>
           <View style={{ gap: space.s3 }}>

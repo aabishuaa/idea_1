@@ -249,7 +249,9 @@ export default function HomeScreen() {
             </Card>
           )}
 
-          {/* BizBot — visible to everyone, not just workers with a profile */}
+          {/* BizBot is worker-facing: it answers business-formalization
+              questions, which a customer-only account has no use for. */}
+          {profile?.is_worker && (
           <ScalePress haptic onPress={() => router.push('/formalize/bizbot')}>
             <LinearGradient
               colors={[colors.primary, colors.accent]}
@@ -288,6 +290,7 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </ScalePress>
+          )}
 
           {/* Grow prompt for customers who haven't listed their skills yet */}
           {profile && !profile.is_worker && (

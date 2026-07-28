@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
+import { SuccessOverlay } from '@/components/ui/SuccessOverlay';
 import { AppText } from '@/components/ui/Text';
 import { embedService } from '@/lib/edge';
 import { supabase } from '@/lib/supabase';
@@ -45,6 +46,7 @@ export default function WorkerSetupScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -150,6 +152,7 @@ export default function WorkerSetupScreen() {
     await refreshProfile();
     setBusy(false);
     setSaved(true);
+    setCelebrating(true);
   };
 
   // Group the trade list by category for the picker.
@@ -164,6 +167,25 @@ export default function WorkerSetupScreen() {
 
   return (
     <Screen>
+      <SuccessOverlay
+        visible={celebrating}
+        icon={offerServices ? 'briefcase' : 'checkmark'}
+        title={offerServices ? "You're listed!" : 'Profile saved'}
+        message={
+          offerServices
+            ? 'Customers searching for your service can now find you. Get verified next to stand out.'
+            : 'Your details are up to date.'
+        }
+        actionTitle={
+          offerServices && !profile?.identity_verified ? 'Get verified' : 'Done'
+        }
+        onAction={() => {
+          setCelebrating(false);
+          if (offerServices && !profile?.identity_verified) router.push('/verification');
+        }}
+        secondaryTitle={offerServices && !profile?.identity_verified ? 'Later' : undefined}
+        onSecondary={() => setCelebrating(false)}
+      />
       <View style={{ gap: space.s5 }}>
         <Input label="Full name" value={fullName} onChangeText={setFullName} />
 
@@ -291,7 +313,7 @@ export default function WorkerSetupScreen() {
             {error}
           </AppText>
         )}
-        {saved && (
+        {saved && !celebrating && (
           <AppText variant="bodySm" color="success">
             Saved. {offerServices ? 'Your profile is live — verification unlocks more visibility.' : ''}
           </AppText>

@@ -132,50 +132,69 @@ export function AppDrawer() {
     },
   ];
 
-  const growNav: NavItem[] = [
-    isWorker
-      ? { icon: 'wallet-outline', label: 'Earnings', href: '/earnings', hint: 'What you have made' }
-      : { icon: 'wallet-outline', label: 'Spending', href: '/dashboard', hint: 'What you have spent' },
-    ...(isWorker
-      ? [{
-          icon: 'ribbon-outline' as const,
+  // Role-aware: a strictly-customer account has no business seeing BizBot,
+  // the formalization pathway, earnings or a reputation record — those are
+  // the worker side of the product. Customers get the one door that leads
+  // there instead ("Become a pro").
+  const growNav: NavItem[] = isWorker
+    ? [
+        {
+          icon: 'wallet-outline',
+          label: 'Earnings',
+          href: '/earnings',
+          hint: 'What you have made',
+        },
+        {
+          icon: 'ribbon-outline',
           label: 'Reputation record',
           href: '/reputation',
           hint: 'Proof of your work you can share',
-        }]
-      : []),
-    {
-      icon: 'sparkles-outline',
-      label: 'Ask BizBot',
-      href: '/formalize/bizbot',
-      hint: 'TRN, GCT, registration — plain answers',
-    },
-    {
-      icon: 'ribbon-outline',
-      label: 'Level Up',
-      href: '/formalize',
-      hint: 'Make your business official',
-    },
-    {
-      icon: 'shield-checkmark-outline',
-      label: 'Verification',
-      href: '/verification',
-      hint: profile?.identity_verified ? 'Verified' : 'Not verified yet',
-    },
-  ];
+        },
+        {
+          icon: 'sparkles-outline',
+          label: 'Ask BizBot',
+          href: '/formalize/bizbot',
+          hint: 'TRN, GCT, registration — plain answers',
+        },
+        {
+          icon: 'trending-up-outline',
+          label: 'Level Up',
+          href: '/formalize',
+          hint: 'Make your business official',
+        },
+        {
+          icon: 'shield-checkmark-outline',
+          label: 'Verification',
+          href: '/verification',
+          hint: profile?.identity_verified ? 'Verified' : 'Not verified yet',
+        },
+      ]
+    : [
+        {
+          icon: 'wallet-outline',
+          label: 'Spending',
+          href: '/dashboard',
+          hint: 'What you have spent',
+        },
+        {
+          icon: 'shield-checkmark-outline',
+          label: 'Verification',
+          href: '/verification',
+          hint: profile?.identity_verified ? 'Verified' : 'Not verified yet',
+        },
+        {
+          icon: 'construct-outline',
+          label: 'Offer your skills',
+          href: '/worker-setup',
+          hint: 'Earn on myB — unlocks BizBot and Level Up',
+        },
+      ];
 
   const accountNav: NavItem[] = [
     { icon: 'person-outline', label: 'Profile', href: '/(tabs)/profile' },
     ...(isWorker
       ? [{ icon: 'briefcase-outline' as const, label: 'Worker profile', href: '/worker-setup' }]
-      : [
-          {
-            icon: 'construct-outline' as const,
-            label: 'Become a pro',
-            href: '/worker-setup',
-            hint: 'Offer your skills',
-          },
-        ]),
+      : []),
     { icon: 'settings-outline', label: 'Settings', href: '/settings' },
   ];
 
@@ -342,7 +361,7 @@ export function AppDrawer() {
           </View>
 
           <View style={{ gap: 2 }}>
-            {sectionLabel('Money & growth')}
+            {sectionLabel(isWorker ? 'Money & growth' : 'Your money')}
             {growNav.map(renderItem)}
           </View>
 

@@ -22,6 +22,8 @@ interface ButtonProps {
   loading?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Overrides the variant's label colour (e.g. on a coloured background). */
+  textColor?: string;
   accessibilityHint?: string;
 }
 
@@ -39,6 +41,7 @@ export function Button({
   loading = false,
   fullWidth = false,
   style,
+  textColor,
   accessibilityHint,
 }: ButtonProps) {
   const { colors } = useTheme();
@@ -54,7 +57,8 @@ export function Button({
     }).start();
 
   const contentColor =
-    variant === 'primary' ? '#FFFFFF' : variant === 'secondary' ? colors.text : colors.accent;
+    textColor ??
+    (variant === 'primary' ? '#FFFFFF' : variant === 'secondary' ? colors.text : colors.accent);
 
   return (
     <Pressable

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
+import { SuccessOverlay } from '@/components/ui/SuccessOverlay';
 import { AppText } from '@/components/ui/Text';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
@@ -19,9 +20,19 @@ export default function VerificationResultScreen() {
 
   const isDemo = demo === '1';
   const success = passed === '1';
+  // Celebrate a genuine pass with the same moment the rest of the app uses.
+  const [celebrating, setCelebrating] = useState(success && !isDemo);
 
   return (
     <Screen scroll={false} style={{ justifyContent: 'center' }}>
+      <SuccessOverlay
+        visible={celebrating}
+        icon="shield-checkmark"
+        title="You're verified!"
+        message="Your Verified badge is live. Customers can see that myB confirmed your identity."
+        actionTitle="Done"
+        onAction={() => setCelebrating(false)}
+      />
       <View style={{ alignItems: 'center', gap: space.s4 }}>
         <View
           style={{
