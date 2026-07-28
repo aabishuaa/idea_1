@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { RequestCard } from '@/components/RequestCard';
 import { Card } from '@/components/ui/Card';
 import { Chip, StatusPill } from '@/components/ui/badges';
 import { Screen } from '@/components/ui/Screen';
@@ -13,6 +14,7 @@ import { EmptyState } from '@/components/ui/states';
 import { formatDateTime, formatJmd } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { useRequests } from '@/providers/RequestsProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { Job, JobStatus } from '@/types/db';
@@ -54,6 +56,7 @@ export default function BookingsScreen() {
   const [sortOpen, setSortOpen] = useState(false);
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const { requests, freshIds, refresh: refreshRequests, clearFresh } = useRequests();
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -69,8 +72,11 @@ export default function BookingsScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [load]),
+      void refreshRequests();
+    }, [load, refreshRequests]),
   );
+
+  const incoming = requests ?? [];
 
   // Counts per status drive the filter chips, so they are informative before
   // you tap them.
@@ -169,6 +175,44 @@ export default function BookingsScreen() {
               ))}
             </Card>
           </FadeSlideIn>
+        )}
+
+        {/*
+          Requests waiting on an answer, pinned above everything else.
+          This is the worker's inbox: a customer sending a request should land
+          here live (RequestsProvider subscribes to the jobs stream), not
+          after a pull-to-refresh.
+        */}
+        {incoming.length > 0 && (
+          <View style={{ gap: space.s3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: colors.warning,
+                }}
+              />
+              <AppText variant="label">
+                {incoming.length === 1
+                  ? '1 request waiting on you'
+                  : `${incoming.length} requests waiting on you`}
+              </AppText>
+            </View>
+            {incoming.map((request) => (
+              <RequestCard
+                key={request.id}
+                request={request}
+                fresh={freshIds.has(request.id)}
+                onPress={() => {
+                  lightTap();
+                  clearFresh(request.id);
+                  router.push({ pathname: '/request/[id]', params: { id: request.id } });
+                }}
+              />
+            ))}
+          </View>
         )}
 
         {/* Which side of the market (workers only) */}

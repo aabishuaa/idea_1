@@ -13,8 +13,11 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppDrawer } from '@/components/AppDrawer';
+import { IncomingRequestBanner } from '@/components/IncomingRequestBanner';
+import { warmChime } from '@/lib/sound';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { DrawerProvider } from '@/providers/DrawerProvider';
+import { RequestsProvider } from '@/providers/RequestsProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 
 void SplashScreen.preventAutoHideAsync();
@@ -46,6 +49,7 @@ function RootStack() {
         <Stack.Screen name="worker/[id]" options={{ title: 'Profile' }} />
         <Stack.Screen name="job/new" options={{ title: 'Request a job' }} />
         <Stack.Screen name="job/[id]" options={{ title: 'Booking' }} />
+        <Stack.Screen name="request/[id]" options={{ title: 'Job request' }} />
         <Stack.Screen name="thread/[id]" options={{ title: 'Chat' }} />
         <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
         <Stack.Screen name="worker-setup" options={{ title: 'Your worker profile' }} />
@@ -76,17 +80,26 @@ export default function RootLayout() {
     if (fontsLoaded) void SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
+  // Decode the confirmation chime up front so the first celebration is on time.
+  useEffect(() => {
+    warmChime();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <DrawerProvider>
-            <RootStack />
-            {/* Global sidebar — reachable from every screen's ☰ button. */}
-            <AppDrawer />
-          </DrawerProvider>
+          <RequestsProvider>
+            <DrawerProvider>
+              <RootStack />
+              {/* Global sidebar — reachable from every screen's ☰ button. */}
+              <AppDrawer />
+              {/* Drops in wherever the worker is when a request arrives. */}
+              <IncomingRequestBanner />
+            </DrawerProvider>
+          </RequestsProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

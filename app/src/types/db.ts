@@ -236,3 +236,32 @@ export interface DemandInsight {
   job_count: number;
   avg_budget_jmd: number | null;
 }
+
+/**
+ * get_incoming_requests() — job requests a worker has not answered yet, with
+ * the customer's identity attached so the decision can be made from the card.
+ */
+export interface IncomingRequest {
+  id: string;
+  title: string;
+  description: string;
+  trade_slug: string | null;
+  parish: string | null;
+  urgency: JobUrgency;
+  budget_min_jmd: number | null;
+  budget_max_jmd: number | null;
+  requested_at: string;
+  customer_id: string;
+  customer_name: string;
+  customer_avatar: string | null;
+  customer_verified: boolean;
+}
+
+/** A work photo on a worker's portfolio (public `portfolios` bucket). */
+export interface PortfolioItem {
+  id: string;
+  user_id: string;
+  storage_path: string;
+  caption: string;
+  created_at: string;
+}

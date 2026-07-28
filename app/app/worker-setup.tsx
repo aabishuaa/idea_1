@@ -105,47 +105,36 @@ export default function WorkerSetupScreen() {
     }
 
     if (offerServices) {
-      const { error: workerError } = await supabase.from('worker_profiles').upsert({
-        user_id: session.user.id,
-        headline: headline.trim(),
-        bio: bio.trim(),
-        parish,
-        years_experience: Number(years) || 0,
-        rate_min_jmd: rateMin ? Number(rateMin) : null,
-        rate_max_jmd: rateMin ? Number(rateMin) : null,
+      // One RPC rather than raw upserts: PostgREST's upsert puts the conflict
+      // key into DO UPDATE SET, which the column-level grants reject with
+      // "permission denied for table worker_profiles" (migration 0018).
+      const { data: saveRows, error: workerError } = await supabase.rpc('save_worker_profile', {
+        p_headline: headline.trim(),
+        p_bio: bio.trim(),
+        p_parish: parish,
+        p_years: Number(years) || 0,
+        p_rate_min: rateMin ? Number(rateMin) : null,
+        p_rate_max: rateMin ? Number(rateMin) : null,
+        p_rate_unit: 'hour',
+        p_available: true,
+        p_visible: true,
+        p_trade_slug: tradeSlug,
+        p_service_title: serviceTitle.trim() || null,
+        p_service_desc: serviceDescription.trim() || null,
+        p_service_id: existingServiceId,
       });
+
       if (workerError) {
         setBusy(false);
         setError(workerError.message);
         return;
       }
 
-      if (tradeSlug && serviceTitle.trim() && serviceDescription.trim()) {
-        const payload = {
-          user_id: session.user.id,
-          trade_slug: tradeSlug,
-          title: serviceTitle.trim(),
-          description: serviceDescription.trim(),
-        };
-        const { data: serviceRow, error: serviceError } = existingServiceId
-          ? await supabase
-              .from('service_descriptions')
-              .update(payload)
-              .eq('id', existingServiceId)
-              .select('id')
-              .single()
-          : await supabase.from('service_descriptions').insert(payload).select('id').single();
-
-        if (serviceError) {
-          setBusy(false);
-          setError(serviceError.message);
-          return;
-        }
-        if (serviceRow) {
-          setExistingServiceId(serviceRow.id);
-          // Fire-and-forget: semantic matching improves once embedded (FR-PROF-4).
-          void embedService(serviceRow.id);
-        }
+      const newServiceId = (saveRows as { service_id: string | null }[] | null)?.[0]?.service_id;
+      if (newServiceId) {
+        setExistingServiceId(newServiceId);
+        // Fire-and-forget: semantic matching improves once embedded (FR-PROF-4).
+        void embedService(newServiceId);
       }
     }
 

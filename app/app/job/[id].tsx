@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { JobTracker } from '@/components/JobTracker';
 import { StatusPill } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,6 +14,7 @@ import { ErrorState, LoadingState } from '@/components/ui/states';
 import { SuccessOverlay } from '@/components/ui/SuccessOverlay';
 import { formatDateTime, formatJmd } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
+import { openThread } from '@/lib/threads';
 import { useAuth } from '@/providers/AuthProvider';
 import { space } from '@/theme/tokens';
 import type { Job, JobStatus, Review } from '@/types/db';
@@ -34,9 +36,12 @@ export default function JobDetailScreen() {
   // Distinguish "still loading" from "loaded, nothing found" — without this
   // the screen spun forever whenever the row could not be read.
   const [phase, setPhase] = useState<'loading' | 'ready' | 'missing'>('loading');
-  const [celebration, setCelebration] = useState<null | 'booked' | 'reviewed' | 'completed'>(
-    confirmed === '1' ? 'booked' : null,
-  );
+  const [celebration, setCelebration] = useState<
+    null | 'booked' | 'reviewed' | 'completed' | 'accepted'
+  >(confirmed === '1' ? 'booked' : null);
+  // Remembered so a status arriving over Realtime can be recognised as a
+  // TRANSITION (requested → accepted) rather than just a value.
+  const previousStatus = useRef<JobStatus | null>(null);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -54,14 +59,45 @@ export default function JobDetailScreen() {
       supabase.from('reviews').select('*').eq('job_id', id).maybeSingle(),
     ]);
     const row = (jobRes.data as JobDetail | null) ?? null;
+
+    // The customer is watching this screen when the pro answers: turn that
+    // into the same celebration the pro just saw, not a silent pill change.
+    if (
+      row &&
+      previousStatus.current === 'requested' &&
+      row.status === 'accepted' &&
+      session?.user.id === row.customer_id
+    ) {
+      setCelebration('accepted');
+    }
+    previousStatus.current = row?.status ?? null;
+
     setJob(row);
     setReview((reviewRes.data as Review | null) ?? null);
     setPhase(row ? 'ready' : 'missing');
-  }, [id]);
+  }, [id, session]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live updates on this booking (migration 0019 publishes `jobs`).
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`job-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'jobs', filter: `id=eq.${id}` },
+        () => {
+          void load();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id, load]);
 
   if (phase === 'loading') {
     return (
@@ -93,6 +129,7 @@ export default function JobDetailScreen() {
     setBusy(false);
     if (error) return;
     if (status === 'completed') setCelebration('completed');
+    if (status === 'accepted') setCelebration('accepted');
     void load();
   };
 
@@ -128,6 +165,17 @@ export default function JobDetailScreen() {
       message: 'Your rating helps the next customer choose with confidence.',
       icon: 'star' as const,
     },
+    accepted: isWorker
+      ? {
+          title: 'Job accepted!',
+          message: `${job.customer?.full_name ?? 'The customer'} has been told you're on it. This job is now tracked here.`,
+          icon: 'briefcase' as const,
+        }
+      : {
+          title: 'You\u2019re booked!',
+          message: `${job.worker?.full_name ?? 'Your pro'} accepted the job. You can message them any time from here.`,
+          icon: 'briefcase' as const,
+        },
   };
 
   return (
@@ -147,6 +195,7 @@ export default function JobDetailScreen() {
         />
       )}
       <View style={{ gap: space.s5 }}>
+        <JobTracker job={job} />
 
         <Card>
           <View style={{ gap: space.s3 }}>
@@ -199,22 +248,12 @@ export default function JobDetailScreen() {
             variant="secondary"
             fullWidth
             onPress={async () => {
-              const { data: thread } = await supabase
-                .from('threads')
-                .select('id')
-                .eq('customer_id', job.customer_id)
-                .eq('worker_id', job.worker_id)
-                .maybeSingle();
-              if (thread) {
-                router.push(`/thread/${thread.id}`);
-              } else {
-                const { data: created } = await supabase
-                  .from('threads')
-                  .insert({ customer_id: job.customer_id, worker_id: job.worker_id, job_id: job.id })
-                  .select('id')
-                  .single();
-                if (created) router.push(`/thread/${created.id}`);
-              }
+              const threadId = await openThread({
+                customerId: job.customer_id,
+                workerId: job.worker_id,
+                jobId: job.id,
+              });
+              if (threadId) router.push(`/thread/${threadId}`);
             }}
           />
         </View>

@@ -26,11 +26,10 @@ export default function ConsentScreen() {
     if (!session) return;
     setBusy(true);
     setError(null);
-    const { error: upsertError } = await supabase.from('verification_records').upsert({
-      user_id: session.user.id,
-      status: 'consented',
-      consent_given_at: new Date().toISOString(),
-      consent_text_version: CONSENT_VERSION,
+    // RPC rather than upsert — see migration 0018: the upsert's DO UPDATE SET
+    // includes user_id, which the column grants (correctly) refuse.
+    const { error: upsertError } = await supabase.rpc('start_verification', {
+      p_consent_version: CONSENT_VERSION,
     });
     setBusy(false);
     if (upsertError) {
