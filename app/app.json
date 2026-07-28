@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.bitbybit.myb",
       "infoPlist": {
         "NSCameraUsageDescription": "myB uses the camera for the identity verification selfie and liveness check.",
-        "NSPhotoLibraryUsageDescription": "myB lets you pick photos for your ID upload and work portfolio."
+        "NSPhotoLibraryUsageDescription": "myB lets you pick photos for your ID upload and work portfolio.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0E16"
       },
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -61,8 +65,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_ME_RUN_EAS_INIT"
-      }
-    }
+        "projectId": "1ebc8430-d1c6-4cdf-9c5f-62c85c662c56"
+      },
+      "router": {}
+    },
+    "owner": "abishua"
   }
 }
