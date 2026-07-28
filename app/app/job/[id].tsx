@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { JobPhotos } from '@/components/JobPhotos';
 import { JobTracker } from '@/components/JobTracker';
 import { StatusPill } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { openThread } from '@/lib/threads';
 import { useAuth } from '@/providers/AuthProvider';
 import { space } from '@/theme/tokens';
-import type { Job, JobStatus, Review } from '@/types/db';
+import type { Job, JobPhoto, JobStatus, Review } from '@/types/db';
 
 interface JobDetail extends Job {
   customer: { full_name: string } | null;
@@ -30,6 +31,7 @@ export default function JobDetailScreen() {
   const { session } = useAuth();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,17 +50,44 @@ export default function JobDetailScreen() {
       setPhase('missing');
       return;
     }
-    const [jobRes, reviewRes] = await Promise.all([
-      supabase
-        .from('jobs')
-        .select(
-          '*, customer:profiles!jobs_customer_id_fkey(full_name), worker:profiles!jobs_worker_id_fkey(full_name)',
-        )
-        .eq('id', id)
-        .maybeSingle(),
+    /*
+      No PostgREST embeds here, deliberately. This used to select
+        worker:profiles!jobs_worker_id_fkey(full_name)
+      but jobs.worker_id references worker_profiles, NOT profiles — so that
+      constraint hint names no relationship to `profiles` and PostgREST
+      rejected the ENTIRE request. data came back null, which the screen could
+      only read as "this booking does not exist": hence "Booking not found" on
+      a booking that was right there in the table.
+
+      Two plain queries instead. Names are a nice-to-have; the booking must
+      render without them.
+    */
+    const [jobRes, reviewRes, photosRes] = await Promise.all([
+      supabase.from('jobs').select('*').eq('id', id).maybeSingle(),
       supabase.from('reviews').select('*').eq('job_id', id).maybeSingle(),
+      supabase.from('job_photos').select('*').eq('job_id', id).order('created_at'),
     ]);
-    const row = (jobRes.data as JobDetail | null) ?? null;
+    setPhotos((photosRes.data as JobPhoto[] | null) ?? []);
+    const base = (jobRes.data as Job | null) ?? null;
+
+    let row: JobDetail | null = null;
+    if (base) {
+      const { data: people } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', [base.customer_id, base.worker_id]);
+      const byId = new Map(
+        ((people as { id: string; full_name: string }[] | null) ?? []).map((person) => [
+          person.id,
+          person,
+        ]),
+      );
+      row = {
+        ...base,
+        customer: byId.get(base.customer_id) ?? null,
+        worker: byId.get(base.worker_id) ?? null,
+      };
+    }
 
     // The customer is watching this screen when the pro answers: turn that
     // into the same celebration the pro just saw, not a silent pill change.
@@ -210,6 +239,7 @@ export default function JobDetailScreen() {
                 {job.description}
               </AppText>
             ) : null}
+            <JobPhotos photos={photos} />
             <View style={{ gap: space.s2 }}>
               <Row label="With" value={isCustomer ? job.worker?.full_name ?? '—' : job.customer?.full_name ?? '—'} />
               <Row label="Requested" value={formatDateTime(job.requested_at)} />

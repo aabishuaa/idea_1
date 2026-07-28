@@ -13,6 +13,7 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppDrawer } from '@/components/AppDrawer';
+import { HeaderBack } from '@/components/HeaderBack';
 import { IncomingRequestBanner } from '@/components/IncomingRequestBanner';
 import { warmChime } from '@/lib/sound';
 import { AuthProvider } from '@/providers/AuthProvider';
@@ -34,6 +35,10 @@ function RootStack() {
           headerTitleStyle: { fontFamily: 'PlusJakartaSans_600SemiBold' },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.bg },
+          // Every stack screen gets a back arrow, including the ones you
+          // arrive at via router.replace where the native one disappears.
+          headerLeft: () => <HeaderBack />,
+          headerBackVisible: false,
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -52,7 +57,8 @@ function RootStack() {
         <Stack.Screen name="request/[id]" options={{ title: 'Job request' }} />
         <Stack.Screen name="thread/[id]" options={{ title: 'Chat' }} />
         <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
-        <Stack.Screen name="worker-setup" options={{ title: 'Your worker profile' }} />
+        <Stack.Screen name="worker-setup" options={{ title: 'Your work' }} />
+        <Stack.Screen name="account" options={{ title: 'Account' }} />
         <Stack.Screen name="verification/index" options={{ title: 'Verification' }} />
         <Stack.Screen name="verification/consent" options={{ title: 'Consent' }} />
         <Stack.Screen name="verification/id-upload" options={{ title: 'Your ID' }} />

@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { RocketMark, Wordmark } from './BrandMark';
 import { AppText } from './ui/Text';
 import { lightTap } from './ui/animated';
 import { useAuth } from '@/providers/AuthProvider';
@@ -95,13 +96,9 @@ export function AppHeader({ alerts = 0 }: AppHeaderProps) {
 
       {/* Wordmark + who you are signed in as — the role has to be obvious. */}
       <View style={{ alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-          <AppText variant="h2" style={{ letterSpacing: -0.5 }}>
-            myB
-          </AppText>
-          <AppText variant="h2" color="accent">
-            .
-          </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+          <RocketMark size={22} />
+          <Wordmark variant="h2" />
         </View>
         <AppText
           variant="caption"
