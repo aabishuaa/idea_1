@@ -53,7 +53,7 @@ export default function NewJobScreen() {
   }, [params.workerId]);
 
   const understand = async () => {
-    if (description.trim().length < 8) return;
+    if (description.trim().length < 6) return;
     setUnderstanding(true);
     try {
       const { intent } = await extractIntent(description.trim());
@@ -168,11 +168,20 @@ export default function NewJobScreen() {
           error={error ?? undefined}
         />
 
+        {/* The old gate needed 8 characters with no explanation, so the
+            button looked broken while you typed. Now it needs 3 and says why. */}
+        {description.trim().length > 0 && description.trim().length < 3 && (
+          <AppText variant="caption" color="textMuted">
+            Add a few more words so we know what you need.
+          </AppText>
+        )}
+
         <Button
           title={params.workerId ? 'Send request' : 'Find matching pros'}
+          icon={params.workerId ? 'send' : 'search'}
           fullWidth
           loading={busy}
-          disabled={description.trim().length < 8}
+          disabled={description.trim().length < 3}
           onPress={submit}
         />
       </View>
