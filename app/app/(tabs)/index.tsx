@@ -51,7 +51,9 @@ export default function HomeScreen() {
     if (!session) return;
     const userId = session.user.id;
     const [tradesRes, prosRes, suggestionRes, jobsRes, workerRes, unreadRes] = await Promise.all([
-      supabase.from('trades').select('*').order('label'),
+      // Popularity, not a fixed list: ranked by real bookings in the last
+      // 90 days so the home grid reflects what people actually hire for.
+      supabase.rpc('get_popular_trades', { p_limit: 8 }),
       supabase.rpc('match_workers', { p_limit: 6 }),
       supabase
         .from('notifications')
@@ -125,10 +127,18 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
-          {/* Category cards */}
+          {/* Category cards — most-booked services right now */}
           <View style={{ gap: space.s3 }}>
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <AppText variant="label" color="textMuted">
+                Popular right now
+              </AppText>
+            </View>
             <CategoryGrid
               trades={trades.length > 0 ? trades : FALLBACK_TRADES}
+              preserveOrder
               onSelect={(slug) =>
                 router.push({ pathname: '/search', params: { trade: slug } })
               }

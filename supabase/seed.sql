@@ -817,3 +817,339 @@ on conflict (user_id) do nothing;
 -- Mirror the server rule (0006): skill tier at 5+ jobs and 4.0★+.
 update public.worker_profiles
    set tier_skill = (jobs_completed >= 5 and rating_avg >= 4.0);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SERVICE ECONOMY POPULATION (migration 0014)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 108 more workers across the non-construction services Jamaica actually runs
+-- on — tutors, hairdressers, cooks, seamstresses, caregivers, phone repair,
+-- drivers. Without these, searching "tutor" correctly returns nothing, because
+-- the marketplace only contained building trades.
+
+do $$
+declare
+  v_first text[] := array[
+    'Shanice','Kemar','Tashana','Rohan','Latoya','Damion','Kimberly','Oneil','Simone','Rayon',
+    'Georgia','Jermaine','Novia','Dwight','Racquel','Fabian','Yanique','Sanya','Chevonne','Paula',
+    'Kadian','Michelle','Judith','Denise','Andre','Marlon','Alicia','Trevor','Camille','Nadia'];
+  v_last text[] := array[
+    'Barrett','Campbell','Reid','Palmer','Grant','Clarke','Morris','Simpson','Roberts','Lewis',
+    'Thompson','Walker','Henry','Gordon','Facey','McKenzie','Blake','Sinclair','Dixon','Wright'];
+  v_parishes text[] := array[
+    'Kingston','St. Andrew','St. Catherine','St. James','Manchester','Clarendon','St. Ann',
+    'Portland','St. Thomas','St. Mary','Trelawny','Hanover','Westmoreland','St. Elizabeth'];
+
+  -- Trade, headline, service title, service description, rate unit, base rate.
+  v_svc text[][] := array[
+    array['tutoring','Tutor — maths, English & sciences','Primary & high school tutoring','One-on-one and small group tutoring for primary and high school students. Maths, English, integrated science. Homework help, exam technique, weekly sessions at home or online.','hour','2000'],
+    array['exam-prep','CXC & CAPE exam preparation','CSEC / CAPE exam prep','Focused CXC CSEC and CAPE preparation. Past paper drilling, SBA guidance, study plans, revision classes before exams. Maths, English A, POB, POA, biology.','hour','2500'],
+    array['music-lessons','Music teacher — piano, guitar & voice','Music lessons for all ages','Piano, keyboard, guitar and voice lessons for beginners to intermediate. Theory, sight reading, church and gospel music, exam preparation.','hour','2500'],
+    array['driving-lessons','Certified driving instructor','Driving lessons & road test prep','Learner driver lessons, manual and automatic, road code, parking, hill starts and full road test preparation with a dual-control car.','hour','3000'],
+    array['hairdressing','Hairdresser — natural hair, braids & weaves','Hair styling, braids & treatments','Natural hair care, cornrows, box braids, crochet, weaves, relaxers, deep conditioning and silk press. Home service available.','job','5000'],
+    array['barbering','Barber — cuts, fades & line-ups','Haircuts, fades & shaves','Clean fades, tapers, line-ups, beard trims and hot towel shaves. Home and office visits, kids welcome.','job','1500'],
+    array['nail-tech','Nail technician — gel, acrylic & pedicures','Manicures, pedicures & nail art','Gel and acrylic nails, overlays, refills, manicures, pedicures and custom nail art. Sterilised tools, home service available.','job','4000'],
+    array['makeup','Makeup artist — bridal & events','Makeup for weddings & events','Bridal, graduation, photoshoot and event makeup. Airbrush and traditional, lashes included, trials available, travels to you.','job','8000'],
+    array['massage','Massage therapist','Therapeutic & relaxation massage','Deep tissue, Swedish and sports massage for back pain, stiffness and stress. Mobile service with own table.','hour','5000'],
+    array['fitness','Personal trainer','Personal training & fitness plans','One-on-one and group training, weight loss programmes, strength training, meal guidance. Home, gym or park sessions.','hour','3000'],
+    array['catering','Caterer — Jamaican & continental','Catering for events & functions','Full catering for weddings, birthdays, church functions and office events. Jamaican and continental menus, serving staff available.','job','60000'],
+    array['baking','Baker — cakes & pastries','Custom cakes & pastries','Birthday and wedding cakes, cupcakes, pastries, black cake and rum cake. Custom designs, delivery available.','job','8000'],
+    array['bartending','Bartender & mixologist','Bar service for events','Professional bar service for weddings, parties and corporate events. Cocktail menus, glassware and bar setup included.','job','15000'],
+    array['event-planning','Event planner & coordinator','Event planning & coordination','Weddings, birthdays, showers and corporate events. Venue sourcing, decor, vendor coordination and day-of management.','job','40000'],
+    array['dj-music','DJ & sound system','DJ services & sound rental','Party, wedding and corporate DJ with full sound system, lighting and MC service. Reggae, dancehall, soca, gospel and old hits.','job','25000'],
+    array['photography','Photographer & videographer','Photography & video coverage','Weddings, graduations, portraits, christenings and business shoots. Edited digital gallery, drone and video available.','job','30000'],
+    array['cleaning','Housekeeper & deep cleaning','House & office cleaning','Regular housekeeping, deep cleans, move-in and move-out cleaning, post-construction cleanup. Own supplies, trustworthy and thorough.','day','8000'],
+    array['laundry','Laundry & ironing service','Wash, dry & ironing','Wash and fold, ironing, uniforms, curtains and bedding. Pickup and delivery within the parish.','job','3000'],
+    array['childcare','Babysitter & nanny','Childcare & babysitting','Reliable babysitting and nanny service, homework supervision, school pickup, meal prep. First aid trained, references available.','day','6000'],
+    array['elder-care','Caregiver for the elderly','Elder care & companionship','Companionship, personal care, medication reminders, meal preparation and light housekeeping for elderly relatives. Day and live-in options.','day','8000'],
+    array['pest-control','Pest control technician','Pest & termite treatment','Roach, ant, rodent, mosquito and termite treatment for homes and businesses. Safe products, follow-up visits included.','job','12000'],
+    array['pool-cleaning','Pool technician','Pool cleaning & maintenance','Weekly pool cleaning, chemical balancing, filter and pump servicing, green-to-clean recovery.','job','10000'],
+    array['dressmaking','Dressmaker & tailor','Dressmaking, tailoring & alterations','Custom dresses, uniforms, suits and church wear. Alterations, hemming, zip replacement and repairs. Quick turnaround.','job','6000'],
+    array['shoe-repair','Shoe repair & leather work','Shoe repair & resoling','Resoling, heel replacement, stitching, zip repair, cleaning and dyeing for shoes, boots and bags.','job','2500'],
+    array['upholstery','Upholsterer','Furniture upholstery & repair','Sofa and chair reupholstery, foam replacement, car seat repair, headboards and cushions. Fabric sourcing available.','job','25000'],
+    array['furniture-making','Furniture maker','Custom furniture building','Handmade beds, tables, wardrobes, shelving and outdoor furniture in hardwood and board. Built to your measurements.','job','45000'],
+    array['computer-repair','Computer technician','Laptop & desktop repair','Virus removal, Windows reinstall, screen and keyboard replacement, data recovery, upgrades and network setup.','job','5000'],
+    array['phone-repair','Phone repair technician','Phone screen & battery repair','Cracked screen replacement, battery swaps, charging port repair, water damage and software unlocking for iPhone and Android.','job','6000'],
+    array['web-design','Web & graphic designer','Websites, logos & flyers','Small business websites, online menus, logos, flyers, business cards and social media graphics. Fast, affordable, mobile-friendly.','job','35000'],
+    array['bookkeeping','Bookkeeper for small business','Bookkeeping & record keeping','Monthly record keeping, invoicing, expense tracking, GCT and payroll preparation, and getting your books ready for TAJ filing.','job','15000'],
+    array['social-media','Social media manager','Social media management','Instagram, TikTok and Facebook management for small businesses. Content planning, posting, captions and paid promotion setup.','job','20000'],
+    array['delivery','Courier & delivery rider','Same-day delivery & courier','Same-day package, food and document delivery across the corporate area. Bike and car, careful handling.','job','1500'],
+    array['moving','Mover & haulage','Moving, haulage & removals','House and office moving, furniture delivery, dump runs and material haulage. Truck and helpers included.','job','20000'],
+    array['car-detailing','Auto detailer','Car wash & detailing','Interior and exterior detailing, wax and polish, engine bay cleaning, seat shampoo and headlight restoration. Mobile service.','job','7000'],
+    array['generator-repair','Generator & small engine repair','Generator servicing & repair','Generator servicing, carburettor cleaning, starter and alternator repair, plus lawnmower and pressure washer servicing.','job','9000'],
+    array['security','Security officer','Private security & event security','Trained security officers for events, construction sites, businesses and residential gates. Day and night shifts.','day','9000']
+  ];
+
+  v_comment text[] := array[
+    'Excellent service, very professional and punctual.',
+    'Really pleased with the work — would book again without hesitation.',
+    'Great communication and fair pricing. Highly recommend.',
+    'Did exactly what was promised and on time.',
+    'Very patient and skilled. My family were impressed.',
+    'Reliable and neat. Easy to deal with.',
+    'Went above and beyond what I asked for.',
+    'Good quality work at a reasonable price.'];
+
+  v_customers uuid[];
+  v_worker    uuid;
+  v_customer  uuid;
+  v_job       uuid;
+  v_row       text[];
+  v_parish    text;
+  v_location  geography;
+  v_rate      numeric;
+  v_jobs      int;
+  v_rating    int;
+  v_days      int;
+  i int;
+  k int;
+  n int;
+begin
+  if exists (select 1 from auth.users where email like 'svc%@demo.myb') then
+    raise notice 'Service-economy workers already present — skipping.';
+    return;
+  end if;
+
+  select array_agg(id) into v_customers from (
+    select id from public.profiles where is_customer order by id limit 20
+  ) c;
+
+  n := array_length(v_svc, 1);
+
+  for i in 1..108 loop
+    v_worker := ('00000000-0000-4000-b000-' || lpad(i::text, 12, '0'))::uuid;
+    v_row := v_svc[1 + (i % n) : 1 + (i % n)][1:6];
+    v_parish := v_parishes[1 + (i % array_length(v_parishes, 1))];
+
+    insert into auth.users
+      (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+       raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+       confirmation_token, recovery_token, email_change, email_change_token_new)
+    values
+      ('00000000-0000-0000-0000-000000000000', v_worker, 'authenticated', 'authenticated',
+       'svc' || lpad(i::text, 3, '0') || '@demo.myb',
+       crypt('myb-demo-123', gen_salt('bf')), now(),
+       '{"provider":"email","providers":["email"]}',
+       jsonb_build_object('full_name',
+         v_first[1 + (i % array_length(v_first, 1))] || ' ' ||
+         v_last[1 + ((i * 3) % array_length(v_last, 1))]),
+       now(), now(), '', '', '', '');
+
+    update public.profiles
+       set is_worker = true, parish = v_parish, identity_verified = (i % 3) <> 0
+     where id = v_worker;
+
+    select st_setsrid(
+             st_makepoint(st_x(p.centroid::geometry) + (((i % 7) - 3) * 0.011),
+                          st_y(p.centroid::geometry) + (((i % 5) - 2) * 0.011)),
+             4326)::geography
+      into v_location
+      from public.parishes p where p.country = 'JM' and p.name = v_parish;
+
+    v_rate := v_svc[1 + (i % n)][6]::numeric;
+
+    insert into public.worker_profiles
+      (user_id, headline, bio, parish, location, years_experience,
+       rate_min_jmd, rate_max_jmd, rate_unit, available)
+    values
+      (v_worker, v_svc[1 + (i % n)][2],
+       v_svc[1 + (i % n)][4] || ' Based in ' || v_parish || '.',
+       v_parish, v_location, 1 + (i % 15),
+       v_rate, v_rate + (i % 3) * (v_rate * 0.15),
+       v_svc[1 + (i % n)][5], (i % 9) <> 0);
+
+    insert into public.service_descriptions (user_id, trade_slug, title, description)
+    values (v_worker, v_svc[1 + (i % n)][1], v_svc[1 + (i % n)][3], v_svc[1 + (i % n)][4]);
+
+    v_jobs := 1 + (i % 8);
+    for k in 1..v_jobs loop
+      v_job := gen_random_uuid();
+      v_customer := v_customers[1 + ((i + k) % array_length(v_customers, 1))];
+      v_days := 4 + ((i * 5 + k * 9) % 80);
+
+      insert into public.jobs
+        (id, customer_id, worker_id, title, description, trade_slug, parish, urgency,
+         status, requested_at, responded_at, started_at, completed_at, agreed_price_jmd)
+      values
+        (v_job, v_customer, v_worker, v_svc[1 + (i % n)][3],
+         'Booked through myB in ' || v_parish || '.',
+         v_svc[1 + (i % n)][1], v_parish,
+         (array['low','normal','normal','high'])[1 + ((i + k) % 4)]::public.job_urgency,
+         'completed',
+         now() - (v_days || ' days')::interval,
+         now() - (v_days || ' days')::interval + interval '90 minutes',
+         now() - ((v_days - 1) || ' days')::interval,
+         now() - ((v_days - 1) || ' days')::interval,
+         v_rate * (1 + (k % 2)));
+
+      v_rating := case when (i + k) % 12 = 0 then 3 when (i + k) % 5 = 0 then 4 else 5 end;
+
+      insert into public.reviews (job_id, worker_id, reviewer_id, rating, comment)
+      values (v_job, v_worker, v_customer, v_rating,
+              v_comment[1 + ((i + k) % array_length(v_comment, 1))]);
+    end loop;
+  end loop;
+
+  raise notice 'Seeded 108 service-economy workers (tutors, stylists, cooks, carers, tech).';
+end $$;
+
+-- Re-apply the skill tier now that the new workers have job history.
+update public.worker_profiles
+   set tier_skill = (jobs_completed >= 5 and rating_avg >= 4.0);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BIZBOT KNOWLEDGE BASE (migration 0015)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Chunks come from docs/kb/*.md, one row per paragraph, so full-text retrieval
+-- has something to return. Verify every fee and threshold against the current
+-- TAJ/COJ publications before demo day — source_url is filled where confirmed.
+
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('business-name-registration', 'Registering a business name (sole trader)', 'JM',
+        null,
+        'registration', 'Companies Office of Jamaica', 'https://www.orcjamaica.com/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'If you trade under any name other than your own legal name — for example "Delroy''s Electrical" instead of just "Delroy Brown" — Jamaican law requires you to register that business name with the Companies Office of Jamaica (COJ). Registering as a sole trader with a business name is the simplest and cheapest way to formalize a one-person trade business.', 'JM', 'registration'
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'To register, complete the Business Name application (Form BRF 1) and submit it to the COJ with your TRN, valid photo identification, and the registration fee. You can apply in person at the COJ office in Kingston, at some Post Offices acting as agents, or online through the COJ''s electronic filing portal. Processing typically takes a few business days.', 'JM', 'registration'
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'The registration fee for a business name is modest (verify the current fee on the COJ fee schedule before applying, as fees are periodically revised). Registration must be renewed every three years for a smaller renewal fee.', 'JM', 'registration'
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'Registering your business name does not create a company — you remain personally responsible for the business. If you later want limited liability, you can incorporate a company with the COJ, which is a separate, more involved process with higher fees and annual filing obligations. Many tradespeople operate successfully for years as registered sole traders before considering incorporation.', 'JM', 'registration'
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 4, 'Benefits of registering include: opening a business bank account in the trade name, issuing invoices and receipts that look professional, qualifying for many supplier and commercial accounts, and being eligible to bid for contracts that require a registered business.', 'JM', 'registration'
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('gct', 'GCT (General Consumption Tax) basics for small traders', 'JM',
+        null,
+        'tax', 'Tax Administration Jamaica', 'https://www.jamaicatax.gov.jm/general-consumption-tax1/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'General Consumption Tax (GCT) is Jamaica''s value-added tax, charged on most goods and services. The standard rate is applied at each stage of sale, and registered businesses collect it on behalf of Tax Administration Jamaica (TAJ).', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'Small tradespeople usually do not need to register for GCT straight away. GCT registration is only mandatory once your gross revenue passes the registration threshold set by TAJ (a yearly turnover figure — verify the current threshold with TAJ, as it is revised from time to time). Below the threshold, you simply do not charge GCT on your services.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'If your business grows past the threshold, you must register with TAJ as a GCT taxpayer, charge GCT on your invoices, file GCT returns (normally monthly), and pay over the tax collected. Registered businesses can also claim back the GCT they pay on business inputs like tools and materials, which can reduce costs.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'Charging GCT without being registered is an offence, and so is failing to register once you cross the threshold. If you are unsure whether your turnover is approaching the threshold, keeping simple monthly records of what you earn — as the MyB app encourages — makes the answer obvious and keeps you safe.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('income-tax-tcc', 'Income tax and the Tax Compliance Certificate (TCC)', 'JM',
+        null,
+        'tax', 'Tax Administration Jamaica', 'https://www.jamaicatax.gov.jm/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'Self-employed people in Jamaica are responsible for declaring their own income and paying income tax on profits above the annual income tax threshold (a yearly amount that is tax-free — verify the current threshold with TAJ, as it is adjusted periodically). Below the threshold, no income tax is due, but filing still builds your record.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'income-tax-tcc'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'As a self-employed person you file an annual income tax return with Tax Administration Jamaica declaring what you earned and your allowable business expenses — tools, materials, transport for jobs, and similar costs reduce your taxable profit. Estimated tax for the current year is normally paid in quarterly instalments. Simple, honest records make filing quick; your MyB job history is useful supporting evidence of income.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'income-tax-tcc'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'A Tax Compliance Certificate (TCC) is a certificate from TAJ confirming your tax affairs are in order. Many larger customers, insurance companies, and all government bodies require a valid TCC before awarding contracts. For a tradesperson, holding a TCC is often the single document that unlocks commercial and government work.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'income-tax-tcc'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'To get a TCC you need to be registered (TRN), have filed the returns you are required to file, and be up to date on payments (income tax, NIS, and — if registered — GCT and education tax). TCCs are issued for a limited validity period and must be renewed. If you are behind, TAJ can arrange payment plans that restore compliance — being behind is a fixable state, not a dead end.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'income-tax-tcc'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('nis', 'NIS for self-employed workers', 'JM',
+        null,
+        'insurance', 'National Insurance Scheme, Ministry of Labour and Social Security', 'https://mlss.gov.jm/departments/national-insurance-scheme/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'The National Insurance Scheme (NIS) is Jamaica''s compulsory social security programme, run by the Ministry of Labour and Social Security. It provides a retirement pension plus benefits for employment injury, invalidity, and survivors. Self-employed people — including independent tradespeople — are required to register and contribute.', 'JM', 'insurance'
+  from public.kb_documents d where d.slug = 'nis'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'To register, visit an NIS office with your TRN and identification and complete the self-employed registration form. You will be issued an NIS number. Contributions for self-employed persons are paid on your declared earnings at the self-employed contribution rate (verify the current rate and payment schedule with the NIS, as rates are updated).', 'JM', 'insurance'
+  from public.kb_documents d where d.slug = 'nis'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'Why it matters for an informal worker going formal: NIS contributions are the difference between having a pension at retirement and having nothing, and they provide a safety net if you are injured and cannot work. A contribution history is also further proof of steady income, which supports loan applications alongside your MyB reputation record.', 'JM', 'insurance'
+  from public.kb_documents d where d.slug = 'nis'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'Contributions can be paid at tax offices. Keeping your payments current keeps you in benefit — long gaps can reduce or delay what you can claim later.', 'JM', 'insurance'
+  from public.kb_documents d where d.slug = 'nis'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('trn', 'Getting a TRN (Taxpayer Registration Number)', 'JM',
+        null,
+        'tax', 'Tax Administration Jamaica', 'https://www.jamaicatax.gov.jm/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'A Taxpayer Registration Number (TRN) is a unique nine-digit number issued by Tax Administration Jamaica (TAJ) that identifies you for all tax and many official purposes in Jamaica. You need a TRN before you can register a business name, open most bank accounts, file taxes, or apply for a Tax Compliance Certificate.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'trn'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'Getting a TRN is free. Individuals apply at any TAJ tax office by completing the TRN application form and presenting identification: a passport, driver''s licence, or national ID, or a birth certificate together with another supporting document. Applications can also be started online through TAJ''s website.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'trn'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'If you work for yourself — for example as a plumber, electrician, carpenter, or other tradesperson — you use your individual TRN for your business dealings as a sole trader. A separate business TRN is only needed if you register a company (for example a limited company with the Companies Office of Jamaica).', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'trn'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'Once issued, your TRN never changes and never expires. If you lose your TRN card, TAJ can reissue it; you do not apply for a new number. Keep your TRN private and only share it with institutions that legitimately need it, such as banks, government agencies, and employers.', 'JM', 'tax'
+  from public.kb_documents d where d.slug = 'trn'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_documents (slug, title, country, parish, topic, source_name, source_url)
+values ('why-formalize', 'Why formalize? What changes when your business is official', 'JM',
+        null,
+        'general', 'MyB / Jamaica Business Development Corporation', 'https://www.jbdc.net/')
+on conflict (slug) do update set title = excluded.title, source_url = excluded.source_url;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 0, 'Formalizing means your business exists on paper: you have a TRN, your business name is registered, you file simple taxes, and you contribute to NIS. It does not mean becoming a big company overnight — a one-person trade business can be fully formal.', 'JM', 'general'
+  from public.kb_documents d where d.slug = 'why-formalize'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 1, 'What formalization unlocks: access to loans and financing (banks and credit unions need proof of income — your registration, filings, and MyB reputation record all count); the ability to bid for contracts with companies, hotels, and government, most of which require a registered business and a Tax Compliance Certificate; a pension and injury protection through NIS; and a business bank account in your trade name.', 'JM', 'general'
+  from public.kb_documents d where d.slug = 'why-formalize'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 2, 'What it costs: the TRN is free, NIS registration is free, and business name registration carries a modest fee renewed every three years. Income tax only applies to profit above the annual threshold, and GCT only applies once your turnover passes the GCT registration threshold. For most small tradespeople the direct cost of being formal is small compared to the work it unlocks.', 'JM', 'general'
+  from public.kb_documents d where d.slug = 'why-formalize'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 3, 'Common worry: "if mi register, tax man come fi mi." In practice, income below the tax threshold owes no income tax — registering mostly means filing simple paperwork that proves your income. That proof is exactly what lenders and big customers need to say yes to you.', 'JM', 'general'
+  from public.kb_documents d where d.slug = 'why-formalize'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 4, 'The Jamaica Business Development Corporation (JBDC) offers free guidance for small businesses at every stage, and HEART/NSTA Trust offers free or subsidised certification that raises what you can charge. You do not have to figure formalization out alone.', 'JM', 'general'
+  from public.kb_documents d where d.slug = 'why-formalize'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 100, 'The BRF 1 form used to register a business name at the Companies Office of Jamaica is known as the Super Form because it is a one-stop document. When you submit it, the Companies Office notifies Tax Administration Jamaica, the National Insurance Scheme, HEART Trust and the National Housing Trust on your behalf. The certificate you receive comes back with your TRN and NIS number already attached, so you do not have to register with each agency separately.', 'JM', d.topic
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 101, 'The registration fee for a business name as a sole trader or partnership is J$2,500 and must accompany the BRF 1 form. Registration is normally processed within a few working days. A business name registration must be renewed periodically, so keep note of the renewal date on your certificate.', 'JM', d.topic
+  from public.kb_documents d where d.slug = 'business-name-registration'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 100, 'You only have to register for General Consumption Tax once your taxable sales pass J$15 million in a year. This threshold was raised from J$10 million with effect from 1 April 2025. If your sales are below the threshold you do not charge GCT on your work at all, which is the case for most independent tradespeople and service providers.', 'JM', d.topic
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;
+insert into public.kb_chunks (document_id, chunk_index, content, country, topic)
+select d.id, 101, 'If your sales do cross the J$15 million threshold you must apply for GCT registration within 21 days of crossing it, using the GCT-1 form. You need a valid TRN before you can submit that form. Registering late allows TAJ to assess GCT on all taxable supplies from the date you crossed the threshold, plus interest, and collecting GCT from customers before you are registered carries a separate penalty.', 'JM', d.topic
+  from public.kb_documents d where d.slug = 'gct'
+on conflict (document_id, chunk_index) do update set content = excluded.content;

@@ -136,6 +136,14 @@ export function AppDrawer() {
     isWorker
       ? { icon: 'wallet-outline', label: 'Earnings', href: '/earnings', hint: 'What you have made' }
       : { icon: 'wallet-outline', label: 'Spending', href: '/dashboard', hint: 'What you have spent' },
+    ...(isWorker
+      ? [{
+          icon: 'ribbon-outline' as const,
+          label: 'Reputation record',
+          href: '/reputation',
+          hint: 'Proof of your work you can share',
+        }]
+      : []),
     {
       icon: 'sparkles-outline',
       label: 'Ask BizBot',

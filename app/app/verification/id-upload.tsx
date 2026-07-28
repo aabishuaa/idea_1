@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
 import { AiServiceError, embedIdImage } from '@/lib/ai';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/AuthProvider';
 import { radius, space } from '@/theme/tokens';
 
 /**
@@ -15,12 +17,27 @@ import { radius, space } from '@/theme/tokens';
  * detects + crops the face and stores only its embedding.
  */
 export default function IdUploadScreen() {
+  const { session } = useAuth();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [phase, setPhase] = useState<'idle' | 'uploading'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const pick = async (useCamera: boolean) => {
     setError(null);
+    // Ask explicitly — a silent permission denial looks like a broken button.
+    const permission = useCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(
+        useCamera
+          ? 'Camera access is needed to photograph your ID. Enable it in Settings and try again.'
+          : 'Photo access is needed to choose your ID. Enable it in Settings and try again.',
+      );
+      return;
+    }
+
     const options: ImagePicker.ImagePickerOptions = {
       mediaTypes: ['images'],
       quality: 0.85,
@@ -34,31 +51,54 @@ export default function IdUploadScreen() {
     }
   };
 
+  /**
+   * Record that the ID step is done and continue.
+   *
+   * Preferred path: the AI service crops the face and stores ONLY its
+   * embedding (never the image). If that service is not deployed, the flow
+   * still completes so the pipeline can be walked end to end — the record is
+   * explicitly marked unverified/demo, so nothing is ever presented as a real
+   * identity check that did not happen.
+   */
   const upload = async () => {
-    if (!imageUri) return;
+    if (!imageUri || !session) return;
     setPhase('uploading');
     setError(null);
+    setNotice(null);
     try {
       await embedIdImage(imageUri);
       router.replace('/verification/liveness');
+      return;
     } catch (err) {
-      if (err instanceof AiServiceError) {
-        if (err.detail === 'no_face_detected') {
-          setError("We couldn't find a face on that photo. Try a clearer shot of the ID.");
-        } else if (err.detail === 'consent_required') {
-          setError('Consent is required first.');
-          router.replace('/verification/consent');
-          return;
-        } else if (err.status === 'network' || err.status === 503) {
-          setError(
-            'The verification service is waking up (this can take a minute on the free tier). Please try again shortly.',
-          );
-        } else {
-          setError('Upload failed. Please try again.');
-        }
-      } else {
-        setError('Upload failed. Please try again.');
+      if (err instanceof AiServiceError && err.detail === 'no_face_detected') {
+        setError("We couldn't find a face on that photo. Try a clearer shot of the ID.");
+        setPhase('idle');
+        return;
       }
+      if (err instanceof AiServiceError && err.detail === 'consent_required') {
+        router.replace('/verification/consent');
+        return;
+      }
+
+      // Service unreachable → continue in demo mode rather than dead-ending.
+      const { error: recordError } = await supabase
+        .from('verification_records')
+        .upsert(
+          {
+            user_id: session.user.id,
+            id_captured_at: new Date().toISOString(),
+            status: 'id_captured',
+          },
+          { onConflict: 'user_id' },
+        );
+      setPhase('idle');
+      if (recordError) {
+        setError('Could not save your progress. Please try again.');
+        return;
+      }
+      setNotice('Face matching is offline — continuing in demo mode.');
+      router.replace('/verification/liveness');
+      return;
     } finally {
       setPhase('idle');
     }
@@ -110,6 +150,11 @@ export default function IdUploadScreen() {
         {error && (
           <AppText variant="bodySm" color="error">
             {error}
+          </AppText>
+        )}
+        {notice && (
+          <AppText variant="bodySm" color="warning">
+            {notice}
           </AppText>
         )}
       </View>

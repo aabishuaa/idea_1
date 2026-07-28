@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Switch, View } from 'react-native';
 
 import { Chip } from '@/components/ui/badges';
@@ -49,7 +49,7 @@ export default function WorkerSetupScreen() {
   const load = useCallback(async () => {
     if (!session) return;
     const [tradesRes, workerRes, serviceRes] = await Promise.all([
-      supabase.from('trades').select('*').order('label'),
+      supabase.from('trades').select('slug, label, emoji, category').order('sort_order'),
       supabase.from('worker_profiles').select('*').eq('user_id', session.user.id).maybeSingle(),
       supabase
         .from('service_descriptions')
@@ -152,6 +152,16 @@ export default function WorkerSetupScreen() {
     setSaved(true);
   };
 
+  // Group the trade list by category for the picker.
+  const tradeGroups = useMemo(() => {
+    const map = new Map<string, Trade[]>();
+    trades.forEach((trade) => {
+      const key = trade.category ?? 'Other';
+      map.set(key, [...(map.get(key) ?? []), trade]);
+    });
+    return [...map.entries()];
+  }, [trades]);
+
   return (
     <Screen>
       <View style={{ gap: space.s5 }}>
@@ -221,20 +231,34 @@ export default function WorkerSetupScreen() {
               onChangeText={setRateMin}
             />
 
-            <View style={{ gap: space.s2 }}>
-              <AppText variant="label" color="textMuted">
-                Your trade
-              </AppText>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
-                {trades.map((trade) => (
-                  <Chip
-                    key={trade.slug}
-                    label={`${trade.emoji} ${trade.label}`}
-                    selected={tradeSlug === trade.slug}
-                    onPress={() => setTradeSlug(trade.slug)}
-                  />
-                ))}
+            <View style={{ gap: space.s3 }}>
+              <View style={{ gap: 2 }}>
+                <AppText variant="label" color="textMuted">
+                  What do you do?
+                </AppText>
+                <AppText variant="caption" color="textMuted">
+                  Trades, teaching, beauty, food, care, tech — if people pay you for it,
+                  it belongs here.
+                </AppText>
               </View>
+              {/* Grouped by category: a flat list of 48 chips is unusable. */}
+              {tradeGroups.map(([category, items]) => (
+                <View key={category} style={{ gap: space.s2 }}>
+                  <AppText variant="caption" color="textMuted">
+                    {category.toUpperCase()}
+                  </AppText>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
+                    {items.map((trade) => (
+                      <Chip
+                        key={trade.slug}
+                        label={`${trade.emoji} ${trade.label}`}
+                        selected={tradeSlug === trade.slug}
+                        onPress={() => setTradeSlug(trade.slug)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
 
             <Input

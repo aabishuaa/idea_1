@@ -78,7 +78,7 @@ Edge functions hold the LLM keys (never the app):
 
 ```bash
 supabase secrets set GEMINI_API_KEY=your-gemini-key GROQ_API_KEY=your-groq-key
-supabase functions deploy extract-intent embed-text keepwarm --no-verify-jwt
+supabase functions deploy extract-intent embed-text keepwarm bizbot --no-verify-jwt
 ```
 
 > `keepwarm` must be public (no JWT) so the GitHub Action can ping it; `extract-intent`
@@ -182,13 +182,19 @@ still runs; push registration is skipped with a console notice.
 
 ---
 
-## 4. Demo data — seeding 125 users
+## 4. Demo data — seeding 233 users
 
-`supabase/seed.sql` populates the whole marketplace: **125 accounts** (113 workers
-across all 12 trades and all 14 parishes, 12 customers), **644 jobs**, **641 reviews**,
-live bookings in every status, chats with unread messages, a formalization journey in
-two states, and verification records. Password for every demo account is
-`myb-demo-123`.
+`supabase/seed.sql` populates the whole marketplace: **233 accounts** (221 workers
+across all 48 service categories and all 14 parishes), **1,100+ jobs and reviews**,
+live bookings in every status, chats with unread messages, saved pros, notifications,
+a formalization journey in two states, verification records, and the BizBot knowledge
+base. Password for every demo account is `myb-demo-123`.
+
+The catalogue is the whole informal economy, not just the building trades — tutors,
+hairdressers, barbers, cooks, bakers, seamstresses, caregivers, babysitters, phone and
+computer repair, DJs, photographers, drivers, cleaners and more. That is what makes
+free-text search demonstrable: typing "tutor", "someone to braid my hair" or
+"mi sink a leak under di counter" returns the right people.
 
 Ratings, reputation, review counts and Top Pro tiers are **not** hardcoded — the seed
 inserts real jobs and reviews and lets the same SQL triggers the live app uses compute

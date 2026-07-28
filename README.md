@@ -43,7 +43,7 @@ Full instructions (with every placeholder you need to fill in): **[SETUP.md](SET
 # 1. Supabase: create a free project, then
 supabase link --project-ref YOUR-PROJECT-REF
 supabase db push
-supabase functions deploy extract-intent embed-text keepwarm
+supabase functions deploy extract-intent embed-text keepwarm bizbot
 
 # 2. AI service
 cd ai-service && cp .env.example .env   # fill in keys
