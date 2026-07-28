@@ -237,6 +237,29 @@ The bulk block near the end of `seed.sql` is a plain loop — edit `for i in 1..
 (workers) or `for i in 1..10` (customers) and re-seed. Everything else derives from
 the loop counter, so the data stays deterministic and identical for the whole team.
 
+### Before a live demo — fill the request inbox
+
+`seed.sql` builds *history*: completed jobs, so ratings and reputation are computed by
+the real triggers rather than faked. History is the wrong thing for the worker's
+request inbox, though — an accepted job isn't waiting on anybody — so a freshly seeded
+pro opens **Bookings** with nothing to answer.
+
+Run `supabase/demo_pending_requests.sql` (paste into the SQL Editor) and
+`rohan@demo.myb` gets three real requests waiting, from three customers, at three
+urgencies. It clears his unanswered requests first, so it's safe to run again after a
+rehearsal where you accepted them all.
+
+Then the two-phone demo works end to end:
+
+1. Sign in as `rohan@demo.myb` on phone A → **Bookings** shows *3 requests waiting on you*.
+2. Sign in as `andre@demo.myb` on phone B → book Rohan for something.
+3. Phone A: the request **drops in as a banner** wherever Rohan is, with the chime.
+4. Tap it → review who's asking, ask a question in chat without committing, then **Accept**.
+5. Both phones celebrate; the job is tracked on `job/[id]` with its progress stepper.
+
+Realtime has to be on for the project (it is by default) — migration `0019` publishes
+the `jobs` table, and RLS still decides who receives what.
+
 ---
 
 ## 5. Verify the stack end-to-end

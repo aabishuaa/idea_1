@@ -180,7 +180,7 @@ export default function BookingsScreen() {
         {/*
           Requests waiting on an answer, pinned above everything else.
           This is the worker's inbox: a customer sending a request should land
-          here live (useIncomingRequests subscribes to the jobs stream), not
+          here live (RequestsProvider subscribes to the jobs stream), not
           after a pull-to-refresh.
         */}
         {incoming.length > 0 && (
