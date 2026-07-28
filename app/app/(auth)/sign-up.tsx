@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { PasswordMeter } from '@/components/PasswordMeter';
-import { RocketMark, Wordmark } from '@/components/BrandMark';
+import { BrandLockup } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -83,8 +83,7 @@ export default function SignUpScreen() {
       <View style={{ gap: space.s5, paddingTop: space.s8 }}>
         <Stagger interval={80} gap={space.s5}>
           <View style={{ alignItems: 'center', gap: space.s3 }}>
-            <RocketMark size={64} />
-            <Wordmark variant="h2" />
+            <BrandLockup variant="h1" markSize={52} />
             <AppText variant="overline" color="textMuted">
               Connect. Build. Grow.
             </AppText>

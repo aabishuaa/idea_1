@@ -11,6 +11,8 @@ export interface JobIntent {
   location: string | null;
   urgency: 'low' | 'normal' | 'high' | 'emergency';
   budget: { min_jmd: number | null; max_jmd: number | null };
+  /** A short title naming the job. Null when the LLM only echoed the text. */
+  title?: string | null;
 }
 
 export interface ExtractIntentResult {
@@ -31,14 +33,24 @@ export async function extractIntent(description: string): Promise<ExtractIntentR
   return data;
 }
 
+// Saving several services fires several embed calls; if the function is down
+// (no LLM key, not deployed) every one of them logged, filling the terminal
+// with the same line. Say it once.
+let embedWarned = false;
+
 export async function embedService(serviceId: string): Promise<void> {
-  // Failure is non-fatal by design: matching falls back to trade/parish
-  // filters until the embedding exists (the function can be retried).
+  // Failure is non-fatal by design: matching falls back to text/trade/parish
+  // search until the embedding exists (the function can be retried). Semantic
+  // ranking is an enhancement on top of search that always works.
   const { error } = await supabase.functions.invoke('embed-text', {
     body: { service_id: serviceId },
   });
-  if (error) {
-    console.warn('[myB] embed-text failed (semantic matching degraded):', error.message);
+  if (error && !embedWarned) {
+    embedWarned = true;
+    console.warn(
+      '[myB] embed-text unavailable — semantic ranking is off, text search still works.',
+      error.message,
+    );
   }
 }
 

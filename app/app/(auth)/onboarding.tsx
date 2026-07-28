@@ -11,7 +11,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 
-import { RocketMark, Wordmark } from '@/components/BrandMark';
+import { BrandLockup } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Rating } from '@/components/ui/Rating';
@@ -242,10 +242,7 @@ export default function OnboardingScreen() {
           paddingHorizontal: space.s4,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-          <RocketMark size={30} />
-          <Wordmark variant="h3" />
-        </View>
+        <BrandLockup variant="h3" markSize={28} />
         {!isLast && (
           <Pressable accessibilityRole="button" onPress={() => goTo(SLIDES.length - 1)} hitSlop={8}>
             <AppText variant="label" color="textMuted">

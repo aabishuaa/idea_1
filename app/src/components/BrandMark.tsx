@@ -7,6 +7,24 @@ import { AppText } from './ui/Text';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 
+type MarkVariant = 'display' | 'h1' | 'h2' | 'h3';
+
+/** The dot is a drawn circle, so it stays perfectly round at every size. */
+const DOT_SIZE: Record<MarkVariant, number> = {
+  display: 10,
+  h1: 8,
+  h2: 7,
+  h3: 6,
+};
+
+/** Baseline nudge so the dot sits where a full stop would. */
+const DOT_DROP: Record<MarkVariant, number> = {
+  display: 4,
+  h1: 3,
+  h2: 2,
+  h3: 2,
+};
+
 /**
  * The myB rocket, in a diamond-blue roundel. Drawn rather than imported so the
  * brand mark is theme-aware and needs no raster asset at any density — the
@@ -38,34 +56,74 @@ export function RocketMark({ size = 64 }: { size?: number }) {
   );
 }
 
-/** "myB." — the dot is always the accent. */
-export function Wordmark({ variant = 'h1' }: { variant?: 'display' | 'h1' | 'h2' | 'h3' }) {
+/**
+ * "myB" followed by the blue dot.
+ *
+ * The dot is a View, not a typed full stop: a period rendered in Plus Jakarta
+ * Sans is a small rounded square that sits on the baseline, and at h3 it read
+ * as a speck of dirt rather than the brand's dot.
+ */
+export function Wordmark({ variant = 'h1' }: { variant?: MarkVariant }) {
+  const { colors } = useTheme();
+  const size = DOT_SIZE[variant];
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
       <AppText variant={variant} style={{ letterSpacing: -0.5 }}>
         myB
       </AppText>
-      <AppText variant={variant} color="accent">
-        .
-      </AppText>
+      <View
+        accessibilityElementsHidden
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: colors.accent,
+          marginLeft: 2,
+          marginBottom: DOT_DROP[variant],
+        }}
+      />
     </View>
   );
 }
 
 /**
- * Launch sequence for the splash: the rocket shudders on the pad, fires, then
- * climbs away as the wordmark rises into its place.
+ * The full lockup: rocket, then the wordmark. This is the logo — anywhere the
+ * name appears, the rocket appears with it.
+ */
+export function BrandLockup({
+  variant = 'h2',
+  markSize,
+}: {
+  variant?: MarkVariant;
+  markSize?: number;
+}) {
+  const fallback: Record<MarkVariant, number> = { display: 56, h1: 40, h2: 26, h3: 22 };
+  return (
+    <View
+      accessibilityRole="image"
+      accessibilityLabel="myB"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}
+    >
+      <RocketMark size={markSize ?? fallback[variant]} />
+      <Wordmark variant={variant} />
+    </View>
+  );
+}
+
+/**
+ * Launch sequence for the splash: the rocket shudders on the pad, fires,
+ * climbs away — and the myB logo is revealed in the space it leaves behind.
  *
- * Everything is transform + opacity so it runs on the native driver — this
+ * Everything is transform + opacity so it runs on the native driver: this
  * plays while JavaScript is busy restoring the session, which is exactly when
  * a JS-driven animation would stutter.
  */
-export function RocketLaunch({ onDone }: { onDone?: () => void }) {
+export function RocketLaunch() {
   const { colors } = useTheme();
   const shake = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(0)).current;
   const flame = useRef(new Animated.Value(0)).current;
-  const word = useRef(new Animated.Value(0)).current;
+  const logo = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.sequence([
@@ -79,16 +137,8 @@ export function RocketLaunch({ onDone }: { onDone?: () => void }) {
         }),
         Animated.loop(
           Animated.sequence([
-            Animated.timing(shake, {
-              toValue: 1,
-              duration: 45,
-              useNativeDriver: true,
-            }),
-            Animated.timing(shake, {
-              toValue: -1,
-              duration: 45,
-              useNativeDriver: true,
-            }),
+            Animated.timing(shake, { toValue: 1, duration: 45, useNativeDriver: true }),
+            Animated.timing(shake, { toValue: -1, duration: 45, useNativeDriver: true }),
           ]),
           { iterations: 5 },
         ),
@@ -96,46 +146,32 @@ export function RocketLaunch({ onDone }: { onDone?: () => void }) {
       // 2. Liftoff.
       Animated.timing(lift, {
         toValue: 1,
-        duration: 620,
+        duration: 600,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-      // 3. The wordmark arrives where the rocket was.
-      Animated.timing(word, {
+      // 3. The logo is revealed where the rocket was.
+      Animated.spring(logo, {
         toValue: 1,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
+        speed: 11,
+        bounciness: 9,
         useNativeDriver: true,
       }),
-    ]).start(() => onDone?.());
-  }, [shake, lift, flame, word, onDone]);
+    ]).start();
+  }, [shake, lift, flame, logo]);
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', gap: space.s4 }}>
-      <View style={{ height: 120, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ height: 130, alignItems: 'center', justifyContent: 'center' }}>
+        {/* The rocket that flies away */}
         <Animated.View
           style={{
             alignItems: 'center',
             opacity: lift.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
             transform: [
-              {
-                translateX: shake.interpolate({
-                  inputRange: [-1, 1],
-                  outputRange: [-1.5, 1.5],
-                }),
-              },
-              {
-                translateY: lift.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -420],
-                }),
-              },
-              {
-                scale: lift.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [1, 0.55],
-                }),
-              },
+              { translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-1.5, 1.5] }) },
+              { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -440] }) },
+              { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) },
             ],
           }}
         >
@@ -163,22 +199,21 @@ export function RocketLaunch({ onDone }: { onDone?: () => void }) {
           </Animated.View>
         </Animated.View>
 
-        {/* The wordmark settles into the space the rocket left. */}
+        {/* …revealing the logo underneath it. */}
         <Animated.View
           style={{
             position: 'absolute',
-            alignItems: 'center',
-            opacity: word,
+            opacity: logo,
             transform: [
-              { translateY: word.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+              { scale: logo.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }) },
             ],
           }}
         >
-          <AppText variant="display">myB</AppText>
+          <BrandLockup variant="display" markSize={62} />
         </Animated.View>
       </View>
 
-      <Animated.View style={{ opacity: word, alignItems: 'center', gap: space.s1 }}>
+      <Animated.View style={{ opacity: logo, alignItems: 'center' }}>
         <AppText variant="body" color="textMuted">
           Mind yuh business.
         </AppText>

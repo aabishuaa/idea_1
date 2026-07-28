@@ -12,8 +12,9 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
 import { lightTap } from '@/components/ui/animated';
 import { extractIntent } from '@/lib/edge';
+import { suggestJobTitle } from '@/lib/jobTitle';
 import { logEvent } from '@/lib/events';
-import { pickImage, type PickedImage } from '@/lib/media';
+import { pickImage, uploadTo, type PickedImage } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -45,6 +46,10 @@ export default function NewJobScreen() {
   const [budget, setBudget] = useState('');
   const [tradeSlug, setTradeSlug] = useState<string | null>(null);
   const [parish, setParish] = useState<string | null>(null);
+  // The title is generated unless the customer edits it. Tracking that lets
+  // the generator keep improving as they type without overwriting their words.
+  const [titleEdited, setTitleEdited] = useState(false);
+  const [tradeLabels, setTradeLabels] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [understanding, setUnderstanding] = useState(false);
   const [photos, setPhotos] = useState<PickedImage[]>([]);
@@ -60,6 +65,36 @@ export default function NewJobScreen() {
       .then(({ data }) => setWorkerName(data?.full_name ?? null));
   }, [params.workerId]);
 
+  // Trade labels make a far better title than a slug ("Plumbing job in
+  // Kingston" beats "plumbing job").
+  useEffect(() => {
+    void supabase
+      .from('trades')
+      .select('slug, label')
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        ((data as { slug: string; label: string }[] | null) ?? []).forEach((trade) => {
+          map[trade.slug] = trade.label;
+        });
+        setTradeLabels(map);
+      });
+  }, []);
+
+  /*
+    The title used to be `description.slice(0, 60)` — it just echoed back
+    whatever was typed, which is not a title, it is the same sentence twice on
+    the booking card. Now: the LLM proposes a real one, and when it cannot
+    (no key, cold start, or it echoed), a deterministic generator builds one
+    from the trade and parish. Never a copy of the description.
+  */
+  const autoTitle = (intentTitle?: string | null, slug?: string | null, where?: string | null) =>
+    suggestJobTitle({
+      llmTitle: intentTitle ?? null,
+      description,
+      tradeLabel: slug ? (tradeLabels[slug] ?? null) : null,
+      parish: where ?? null,
+    });
+
   const understand = async () => {
     if (description.trim().length < 6) return;
     setUnderstanding(true);
@@ -71,9 +106,12 @@ export default function NewJobScreen() {
       if (intent.budget.max_jmd ?? intent.budget.min_jmd) {
         setBudget(String(intent.budget.max_jmd ?? intent.budget.min_jmd));
       }
-      if (!title) setTitle(description.trim().slice(0, 60));
+      if (!titleEdited) {
+        setTitle(autoTitle(intent.title, intent.job_type, intent.location));
+      }
     } catch {
-      // LLM cold/down — the form still works manually (SR-6).
+      // LLM cold/down — the form still works, with a locally generated title.
+      if (!titleEdited) setTitle(autoTitle(null, tradeSlug, parish));
     } finally {
       setUnderstanding(false);
     }
@@ -96,7 +134,7 @@ export default function NewJobScreen() {
       .insert({
         customer_id: session.user.id,
         worker_id: params.workerId,
-        title: title.trim() || description.trim().slice(0, 60),
+        title: title.trim() || autoTitle(null, tradeSlug, parish),
         description: description.trim(),
         trade_slug: tradeSlug,
         parish,
@@ -117,13 +155,12 @@ export default function NewJobScreen() {
     if (photos.length > 0) {
       await Promise.all(
         photos.map(async (photo, index) => {
-          const path = `${data.id}/${Date.now()}-${index}.${photo.extension}`;
-          const response = await fetch(photo.uri);
-          const bytes = await response.arrayBuffer();
-          const { error: uploadError } = await supabase.storage
-            .from('job-photos')
-            .upload(path, bytes, { contentType: photo.mimeType, upsert: false });
-          if (uploadError) return;
+          const path = await uploadTo(
+            'job-photos',
+            `${data.id}/${Date.now()}-${index}.${photo.extension}`,
+            photo,
+          );
+          if (!path) return;
           await supabase
             .from('job_photos')
             .insert({ job_id: data.id, uploaded_by: session.user.id, storage_path: path });
@@ -168,7 +205,16 @@ export default function NewJobScreen() {
           </AppText>
         )}
 
-        <Input label="Title" placeholder="Short summary" value={title} onChangeText={setTitle} />
+        <Input
+          label="Title"
+          placeholder="We'll name it for you — tap to change"
+          value={title}
+          onChangeText={(text) => {
+            setTitleEdited(true);
+            setTitle(text);
+          }}
+          success={title && !titleEdited ? 'Suggested — edit if you like' : undefined}
+        />
 
         <View style={{ gap: space.s2 }}>
           <AppText variant="label" color="textMuted">
