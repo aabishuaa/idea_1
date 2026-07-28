@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/badges';
@@ -9,12 +10,17 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { lightTap } from '@/components/ui/animated';
 import { extractIntent } from '@/lib/edge';
 import { logEvent } from '@/lib/events';
+import { pickImage, type PickedImage } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
-import { space } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeContext';
+import { radius, space } from '@/theme/tokens';
 import type { JobUrgency } from '@/types/db';
+
+const MAX_PHOTOS = 4;
 
 const URGENCIES: { value: JobUrgency; label: string }[] = [
   { value: 'low', label: 'Whenever' },
@@ -31,6 +37,7 @@ const URGENCIES: { value: JobUrgency; label: string }[] = [
 export default function NewJobScreen() {
   const params = useLocalSearchParams<{ workerId?: string }>();
   const { session } = useAuth();
+  const { colors } = useTheme();
   const [workerName, setWorkerName] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [title, setTitle] = useState('');
@@ -40,6 +47,7 @@ export default function NewJobScreen() {
   const [parish, setParish] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [understanding, setUnderstanding] = useState(false);
+  const [photos, setPhotos] = useState<PickedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,6 +112,25 @@ export default function NewJobScreen() {
       setError(insertError?.message ?? 'Could not send the request. Try again.');
       return;
     }
+    // Photos can only be uploaded once the job exists: the storage policy
+    // authorises by job membership, and the path is <job_id>/…
+    if (photos.length > 0) {
+      await Promise.all(
+        photos.map(async (photo, index) => {
+          const path = `${data.id}/${Date.now()}-${index}.${photo.extension}`;
+          const response = await fetch(photo.uri);
+          const bytes = await response.arrayBuffer();
+          const { error: uploadError } = await supabase.storage
+            .from('job-photos')
+            .upload(path, bytes, { contentType: photo.mimeType, upsert: false });
+          if (uploadError) return;
+          await supabase
+            .from('job_photos')
+            .insert({ job_id: data.id, uploaded_by: session.user.id, storage_path: path });
+        }),
+      );
+    }
+
     logEvent('job_request_created', { trade_slug: tradeSlug, parish, payload: { urgency } });
     // Must be the ROUTE PATTERN, not the resolved path: passing
     // `/job/<uuid>` with a params object does not match any route, so the
@@ -156,6 +183,69 @@ export default function NewJobScreen() {
                 onPress={() => setUrgency(option.value)}
               />
             ))}
+          </View>
+        </View>
+
+        {/* A photo says more than a paragraph — the pro is deciding whether
+            they can do this job, and "mi sink a leak" is ambiguous. */}
+        <View style={{ gap: space.s2 }}>
+          <AppText variant="label" color="textMuted">
+            Add photos (optional)
+          </AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
+            {photos.map((photo, index) => (
+              <Pressable
+                key={photo.uri}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${index + 1}`}
+                onPress={() => setPhotos((current) => current.filter((item) => item !== photo))}
+              >
+                <Image
+                  source={{ uri: photo.uri }}
+                  style={{ width: 76, height: 76, borderRadius: radius.md }}
+                  resizeMode="cover"
+                />
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -6,
+                    backgroundColor: colors.bg,
+                    borderRadius: radius.full,
+                  }}
+                >
+                  <Ionicons name="close-circle" size={20} color={colors.error} />
+                </View>
+              </Pressable>
+            ))}
+            {photos.length < MAX_PHOTOS && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add a photo"
+                onPress={async () => {
+                  lightTap();
+                  const image = await pickImage();
+                  if (image) setPhotos((current) => [...current, image]);
+                }}
+                style={({ pressed }) => ({
+                  width: 76,
+                  height: 76,
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderStyle: 'dashed',
+                  borderColor: colors.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="camera-outline" size={20} color={colors.accent} />
+                <AppText variant="caption" color="accent">
+                  Photo
+                </AppText>
+              </Pressable>
+            )}
           </View>
         </View>
 

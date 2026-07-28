@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { TextInput, type TextInputProps, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Pressable, TextInput, type TextInputProps, View } from 'react-native';
 
 import { AppText } from './Text';
 import { useTheme } from '@/theme/ThemeContext';
@@ -24,12 +24,16 @@ export function Input({
   icon,
   editable = true,
   secureTextEntry,
+  style,
+  onFocus,
+  onBlur,
   ...rest
 }: InputProps) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   // Password fields get a show/hide toggle automatically.
   const [hidden, setHidden] = useState(secureTextEntry === true);
+  const field = useRef<TextInput>(null);
 
   const borderColor = error
     ? colors.error
@@ -46,10 +50,14 @@ export function Input({
           {label}
         </AppText>
       ) : null}
-      <View
+      {/* The whole field is the tap target, not just the glyphs inside it —
+          tapping the padding used to do nothing, which reads as "broken". */}
+      <Pressable
+        accessible={false}
+        onPress={() => field.current?.focus()}
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: rest.multiline ? 'flex-start' : 'center',
           gap: space.s2,
           backgroundColor: colors.surface,
           borderWidth: focused ? 2 : 1,
@@ -61,26 +69,40 @@ export function Input({
         }}
       >
         {icon ? <Ionicons name={icon} size={18} color={colors.textMuted} /> : null}
+        {/*
+          `rest` is spread FIRST and style is merged rather than replaced.
+          Spreading last meant any caller passing `style` (every multiline
+          field: "About you", the job description, the chat composer) silently
+          replaced the whole text style — losing `color: colors.text`, so the
+          text fell back to platform black and vanished in dark mode. It also
+          replaced onFocus/onBlur, so those fields never showed a focus ring.
+        */}
         <TextInput
-          style={{
-            flex: 1,
-            fontFamily: fonts.regular,
-            fontSize: 16,
-            color: colors.text,
-            paddingVertical: 0,
-          }}
+          ref={field}
+          {...rest}
+          style={[
+            {
+              flex: 1,
+              fontFamily: fonts.regular,
+              fontSize: 16,
+              color: colors.text,
+              paddingVertical: 0,
+            },
+            style,
+          ]}
           placeholderTextColor={colors.textMuted}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
           editable={editable}
           secureTextEntry={secureTextEntry ? hidden : false}
           onFocus={(event) => {
             setFocused(true);
-            rest.onFocus?.(event);
+            onFocus?.(event);
           }}
           onBlur={(event) => {
             setFocused(false);
-            rest.onBlur?.(event);
+            onBlur?.(event);
           }}
-          {...rest}
         />
         {secureTextEntry ? (
           <Ionicons
@@ -93,7 +115,7 @@ export function Input({
             suppressHighlighting
           />
         ) : null}
-      </View>
+      </Pressable>
       {error ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s1 }}>
           <Ionicons name="alert-circle" size={14} color={colors.error} />

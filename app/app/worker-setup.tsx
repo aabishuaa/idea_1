@@ -1,10 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
 
-import { Chip } from '@/components/ui/badges';
+import { SkillPicker, type Skill } from '@/components/SkillPicker';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Chip } from '@/components/ui/badges';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { SuccessOverlay } from '@/components/ui/SuccessOverlay';
@@ -23,42 +25,38 @@ const PARISHES = [
 ];
 
 /**
- * Account + worker profile setup (FR-PROF-1/4). Saving a service description
- * triggers embedding via the embed-text edge function so semantic matching
- * picks it up.
+ * Your work (FR-PROF-1/4) — the listing customers search.
+ *
+ * Account details (name, password, contact) live on /account. This screen is
+ * only about what you sell: they were the same screen, which meant "Account"
+ * and "Worker profile & services" in the menu opened the same thing.
  */
 export default function WorkerSetupScreen() {
   const { session, profile, refreshProfile } = useAuth();
   const { colors } = useTheme();
 
-  const [fullName, setFullName] = useState('');
   const [parish, setParish] = useState('Kingston');
   const [offerServices, setOfferServices] = useState(false);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [tradeSlug, setTradeSlug] = useState<string | null>(null);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [headline, setHeadline] = useState('');
   const [bio, setBio] = useState('');
   const [years, setYears] = useState('');
   const [rateMin, setRateMin] = useState('');
-  const [serviceTitle, setServiceTitle] = useState('');
-  const [serviceDescription, setServiceDescription] = useState('');
-  const [existingServiceId, setExistingServiceId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
 
   const load = useCallback(async () => {
     if (!session) return;
-    const [tradesRes, workerRes, serviceRes] = await Promise.all([
+    const [tradesRes, workerRes, servicesRes] = await Promise.all([
       supabase.from('trades').select('slug, label, emoji, category').order('sort_order'),
       supabase.from('worker_profiles').select('*').eq('user_id', session.user.id).maybeSingle(),
       supabase
         .from('service_descriptions')
         .select('*')
         .eq('user_id', session.user.id)
-        .limit(1)
-        .maybeSingle(),
+        .order('created_at'),
     ]);
     setTrades((tradesRes.data as Trade[] | null) ?? []);
 
@@ -71,32 +69,29 @@ export default function WorkerSetupScreen() {
       setYears(String(worker.years_experience || ''));
       setRateMin(worker.rate_min_jmd != null ? String(worker.rate_min_jmd) : '');
     }
-    const service = serviceRes.data as ServiceDescription | null;
-    if (service) {
-      setExistingServiceId(service.id);
-      setTradeSlug(service.trade_slug);
-      setServiceTitle(service.title);
-      setServiceDescription(service.description);
-    }
+    const services = (servicesRes.data as ServiceDescription[] | null) ?? [];
+    setSkills(
+      services.map((service) => ({
+        trade_slug: service.trade_slug,
+        title: service.title,
+        custom: service.trade_slug === 'other',
+      })),
+    );
   }, [session]);
 
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name);
-      if (profile.parish) setParish(profile.parish);
-    }
+    if (profile?.parish) setParish(profile.parish);
     void load();
-  }, [profile, load]);
+  }, [profile?.parish, load]);
 
   const save = async () => {
     if (!session) return;
     setBusy(true);
     setError(null);
-    setSaved(false);
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({ full_name: fullName.trim(), parish, is_worker: offerServices })
+      .update({ parish, is_worker: offerServices })
       .eq('id', session.user.id);
     if (profileError) {
       setBusy(false);
@@ -105,10 +100,16 @@ export default function WorkerSetupScreen() {
     }
 
     if (offerServices) {
+      if (skills.length === 0) {
+        setBusy(false);
+        setError('Pick at least one thing you do, so customers can find you.');
+        return;
+      }
+
       // One RPC rather than raw upserts: PostgREST's upsert puts the conflict
       // key into DO UPDATE SET, which the column-level grants reject with
       // "permission denied for table worker_profiles" (migration 0018).
-      const { data: saveRows, error: workerError } = await supabase.rpc('save_worker_profile', {
+      const { error: workerError } = await supabase.rpc('save_worker_profile', {
         p_headline: headline.trim(),
         p_bio: bio.trim(),
         p_parish: parish,
@@ -118,84 +119,88 @@ export default function WorkerSetupScreen() {
         p_rate_unit: 'hour',
         p_available: true,
         p_visible: true,
-        p_trade_slug: tradeSlug,
-        p_service_title: serviceTitle.trim() || null,
-        p_service_desc: serviceDescription.trim() || null,
-        p_service_id: existingServiceId,
+        // Services are saved by save_worker_services below, so this call is
+        // profile-only — passing a service here would duplicate one of them.
+        p_trade_slug: null,
+        p_service_title: null,
+        p_service_desc: null,
+        p_service_id: null,
       });
-
       if (workerError) {
         setBusy(false);
         setError(workerError.message);
         return;
       }
 
-      const newServiceId = (saveRows as { service_id: string | null }[] | null)?.[0]?.service_id;
-      if (newServiceId) {
-        setExistingServiceId(newServiceId);
-        // Fire-and-forget: semantic matching improves once embedded (FR-PROF-4).
-        void embedService(newServiceId);
+      // Replaces the whole set atomically (migration 0021), so removing a
+      // skill on screen actually removes it.
+      const { data: savedServices, error: servicesError } = await supabase.rpc(
+        'save_worker_services',
+        {
+          p_services: skills.map((skill) => ({
+            trade_slug: skill.trade_slug,
+            title: skill.title,
+            description: bio.trim(),
+          })),
+        },
+      );
+      if (servicesError) {
+        setBusy(false);
+        setError(servicesError.message);
+        return;
       }
+
+      // Fire-and-forget: semantic matching improves once embedded (FR-PROF-4).
+      ((savedServices as { service_id: string }[] | null) ?? []).forEach((row) => {
+        void embedService(row.service_id);
+      });
     }
 
     await refreshProfile();
     setBusy(false);
-    setSaved(true);
     setCelebrating(true);
   };
 
-  // Group the trade list by category for the picker.
-  const tradeGroups = useMemo(() => {
-    const map = new Map<string, Trade[]>();
-    trades.forEach((trade) => {
-      const key = trade.category ?? 'Other';
-      map.set(key, [...(map.get(key) ?? []), trade]);
-    });
-    return [...map.entries()];
-  }, [trades]);
+  /** After saving, show them the thing they just made. */
+  const goToProfile = () => {
+    setCelebrating(false);
+    if (!session) return;
+    if (offerServices) {
+      router.replace({ pathname: '/worker/[id]', params: { id: session.user.id } });
+    } else {
+      router.replace('/(tabs)/profile');
+    }
+  };
 
   return (
     <Screen>
       <SuccessOverlay
         visible={celebrating}
         icon={offerServices ? 'briefcase' : 'checkmark'}
-        title={offerServices ? "You're listed!" : 'Profile saved'}
+        title={offerServices ? "You're listed!" : 'Saved'}
         message={
           offerServices
-            ? 'Customers searching for your service can now find you. Get verified next to stand out.'
+            ? `Customers searching for ${
+                skills[0]?.title.toLowerCase() ?? 'your service'
+              } can now find you.`
             : 'Your details are up to date.'
         }
-        actionTitle={
-          offerServices && !profile?.identity_verified ? 'Get verified' : 'Done'
+        actionTitle={offerServices ? 'See my profile' : 'Done'}
+        onAction={goToProfile}
+        secondaryTitle={
+          offerServices && !profile?.identity_verified ? 'Get verified' : undefined
         }
-        onAction={() => {
+        onSecondary={() => {
           setCelebrating(false);
-          if (offerServices && !profile?.identity_verified) router.push('/verification');
+          router.push('/verification');
         }}
-        secondaryTitle={offerServices && !profile?.identity_verified ? 'Later' : undefined}
-        onSecondary={() => setCelebrating(false)}
       />
+
       <View style={{ gap: space.s5 }}>
-        <Input label="Full name" value={fullName} onChangeText={setFullName} />
-
-        <View style={{ gap: space.s2 }}>
-          <AppText variant="label" color="textMuted">
-            Parish
-          </AppText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
-            {PARISHES.map((name) => (
-              <Chip
-                key={name}
-                label={name}
-                selected={parish === name}
-                onPress={() => setParish(name)}
-              />
-            ))}
-          </View>
-        </View>
-
         <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="label">Offer your skills on myB</AppText>
               <AppText variant="caption" color="textMuted">
@@ -211,8 +216,26 @@ export default function WorkerSetupScreen() {
           </View>
         </Card>
 
+        <View style={{ gap: space.s2 }}>
+          <AppText variant="label" color="textMuted">
+            Where do you work?
+          </AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
+            {PARISHES.map((name) => (
+              <Chip
+                key={name}
+                label={name}
+                selected={parish === name}
+                onPress={() => setParish(name)}
+              />
+            ))}
+          </View>
+        </View>
+
         {offerServices && (
-          <View style={{ gap: space.s4 }}>
+          <View style={{ gap: space.s5 }}>
+            <SkillPicker trades={trades} value={skills} onChange={setSkills} />
+
             <Input
               label="Headline"
               placeholder="e.g. Licensed electrician — residential & commercial"
@@ -220,100 +243,52 @@ export default function WorkerSetupScreen() {
               onChangeText={setHeadline}
             />
             <Input
-              label="About you"
-              placeholder="Tell customers about your experience…"
+              label="About your work"
+              placeholder="The jobs you handle, how you work, what makes you worth calling. This powers smart matching, so be specific."
               value={bio}
               onChangeText={setBio}
               multiline
-              numberOfLines={3}
-              style={{ minHeight: 72, textAlignVertical: 'top' }}
-            />
-            <Input
-              label="Years of experience"
-              keyboardType="numeric"
-              value={years}
-              onChangeText={setYears}
-            />
-            <Input
-              label="Rate (JMD per hour)"
-              keyboardType="numeric"
-              placeholder="e.g. 3500"
-              value={rateMin}
-              onChangeText={setRateMin}
-            />
-
-            <View style={{ gap: space.s3 }}>
-              <View style={{ gap: 2 }}>
-                <AppText variant="label" color="textMuted">
-                  What do you do?
-                </AppText>
-                <AppText variant="caption" color="textMuted">
-                  Trades, teaching, beauty, food, care, tech — if people pay you for it,
-                  it belongs here.
-                </AppText>
-              </View>
-              {/* Grouped by category: a flat list of 48 chips is unusable. */}
-              {tradeGroups.map(([category, items]) => (
-                <View key={category} style={{ gap: space.s2 }}>
-                  <AppText variant="caption" color="textMuted">
-                    {category.toUpperCase()}
-                  </AppText>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
-                    {items.map((trade) => (
-                      <Chip
-                        key={trade.slug}
-                        label={`${trade.emoji} ${trade.label}`}
-                        selected={tradeSlug === trade.slug}
-                        onPress={() => setTradeSlug(trade.slug)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <Input
-              label="Service title"
-              placeholder="e.g. Wiring & rewiring"
-              value={serviceTitle}
-              onChangeText={setServiceTitle}
-            />
-            <Input
-              label="Describe what you do"
-              placeholder="List the jobs you handle — this powers smart matching, so be specific."
-              value={serviceDescription}
-              onChangeText={setServiceDescription}
-              multiline
               numberOfLines={4}
-              style={{ minHeight: 96, textAlignVertical: 'top' }}
+              style={{ minHeight: 100, textAlignVertical: 'top' }}
             />
+            <View style={{ flexDirection: 'row', gap: space.s3 }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Years doing this"
+                  keyboardType="numeric"
+                  placeholder="5"
+                  value={years}
+                  onChangeText={setYears}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Rate (JMD/hr)"
+                  keyboardType="numeric"
+                  placeholder="3500"
+                  value={rateMin}
+                  onChangeText={setRateMin}
+                />
+              </View>
+            </View>
           </View>
         )}
 
         <Button
-          title="Save"
+          title={offerServices ? 'Publish my profile' : 'Save'}
+          icon={offerServices ? 'rocket-outline' : undefined}
           fullWidth
           loading={busy}
           onPress={save}
-          disabled={!fullName.trim()}
+          disabled={offerServices && skills.length === 0}
         />
         {error && (
-          <AppText variant="bodySm" color="error">
-            {error}
-          </AppText>
-        )}
-        {saved && !celebrating && (
-          <AppText variant="bodySm" color="success">
-            Saved. {offerServices ? 'Your profile is live — verification unlocks more visibility.' : ''}
-          </AppText>
-        )}
-        {saved && offerServices && !profile?.identity_verified && (
-          <Button
-            title="Get verified"
-            variant="secondary"
-            fullWidth
-            onPress={() => router.push('/verification')}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
+            <AppText variant="bodySm" color="error" style={{ flex: 1 }}>
+              {error}
+            </AppText>
+          </View>
         )}
       </View>
     </Screen>

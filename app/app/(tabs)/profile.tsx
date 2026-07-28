@@ -90,8 +90,8 @@ export default function ProfileScreen() {
   const rows: MenuRow[] = [
     {
       icon: 'person-circle-outline',
-      label: 'Account',
-      onPress: () => router.push('/worker-setup'),
+      label: 'Account & password',
+      onPress: () => router.push('/account'),
     },
     {
       icon: 'shield-checkmark-outline',
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
       ? ([
           {
             icon: 'briefcase-outline',
-            label: 'Worker profile & services',
+            label: 'Your work & services',
             onPress: () => router.push('/worker-setup'),
           },
           {
