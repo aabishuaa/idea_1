@@ -140,6 +140,12 @@ export interface Message {
   body: string;
   created_at: string;
   read_at: string | null;
+  /** text · image · job_card (migration 0017). */
+  kind?: 'text' | 'image' | 'job_card';
+  attachment_path?: string | null;
+  attachment_mime?: string | null;
+  /** Set when this message is a shared job card. */
+  job_id?: string | null;
 }
 
 export interface AppNotification {

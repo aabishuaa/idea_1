@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { AppHeader } from '@/components/AppHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
@@ -51,7 +52,14 @@ export default function MessagesScreen() {
   );
 
   return (
-    <Screen padded={false}>
+    <Screen safeTop padded={false}>
+      {/* This moved from a stack screen (which supplied a header) into a tab,
+          so it needs its own app bar and title. */}
+      <View style={{ paddingHorizontal: space.s4, gap: space.s3, paddingBottom: space.s3 }}>
+        <AppHeader />
+        <AppText variant="h2">Messages</AppText>
+      </View>
+
       {threads === null ? (
         <LoadingState />
       ) : threads.length === 0 ? (

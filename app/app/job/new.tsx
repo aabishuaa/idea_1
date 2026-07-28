@@ -105,7 +105,10 @@ export default function NewJobScreen() {
       return;
     }
     logEvent('job_request_created', { trade_slug: tradeSlug, parish, payload: { urgency } });
-    router.replace({ pathname: `/job/${data.id}`, params: { confirmed: '1' } });
+    // Must be the ROUTE PATTERN, not the resolved path: passing
+    // `/job/<uuid>` with a params object does not match any route, so the
+    // navigation silently no-ops and the request looks like it never sent.
+    router.replace({ pathname: '/job/[id]', params: { id: data.id, confirmed: '1' } });
   };
 
   return (

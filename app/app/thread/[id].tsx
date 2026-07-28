@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,12 +18,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/Text';
 import { EmptyState } from '@/components/ui/states';
-import { lightTap } from '@/components/ui/animated';
+import { lightTap, successTap } from '@/components/ui/animated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { fonts, radius, space } from '@/theme/tokens';
-import type { Message } from '@/types/db';
+import type { Job, Message } from '@/types/db';
 
 interface Counterparty {
   id: string;
@@ -71,6 +74,10 @@ export default function ThreadScreen() {
   const [draft, setDraft] = useState('');
   const [other, setOther] = useState<Counterparty | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [threadJob, setThreadJob] = useState<Job | null>(null);
+  const [sharedJobs, setSharedJobs] = useState<Record<string, Job>>({});
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList<ChatRow>>(null);
 
   const load = useCallback(async () => {
@@ -92,15 +99,52 @@ export default function ThreadScreen() {
     setMessages((messagesRes.data as ChatMessage[] | null) ?? []);
     setLoaded(true);
 
-    const thread = threadRes.data as {
+    const threadRow = threadRes.data as {
       customer_id: string;
       worker_id: string;
+      job_id: string | null;
       customer: Counterparty | null;
       worker: Counterparty | null;
     } | null;
-    if (thread) {
-      const mine = session.user.id === thread.customer_id;
-      setOther(mine ? thread.worker : thread.customer);
+    if (threadRow) {
+      const mine = session.user.id === threadRow.customer_id;
+      setOther(mine ? threadRow.worker : threadRow.customer);
+    }
+
+    // Resolve every job referenced in this conversation (the thread's own job
+    // plus any job cards shared into it) so the cards can render titles.
+    const rows = (messagesRes.data as ChatMessage[] | null) ?? [];
+    const jobIds = new Set<string>();
+    if (threadRow?.job_id) jobIds.add(threadRow.job_id);
+    rows.forEach((message) => {
+      if (message.job_id) jobIds.add(message.job_id);
+    });
+    if (jobIds.size > 0) {
+      const { data: jobRows } = await supabase
+        .from('jobs')
+        .select('*')
+        .in('id', [...jobIds]);
+      const map: Record<string, Job> = {};
+      (jobRows as Job[] | null)?.forEach((job) => {
+        map[job.id] = job;
+      });
+      setSharedJobs(map);
+      if (threadRow?.job_id) setThreadJob(map[threadRow.job_id] ?? null);
+    }
+
+    // Signed URLs for image attachments (the bucket is private).
+    const paths = rows
+      .filter((message) => message.kind === 'image' && message.attachment_path)
+      .map((message) => message.attachment_path as string);
+    if (paths.length > 0) {
+      const { data: signed } = await supabase.storage
+        .from('chat-attachments')
+        .createSignedUrls(paths, 3600);
+      const urlMap: Record<string, string> = {};
+      signed?.forEach((entry) => {
+        if (entry.path && entry.signedUrl) urlMap[entry.path] = entry.signedUrl;
+      });
+      setSignedUrls((current) => ({ ...current, ...urlMap }));
     }
 
     // Mark the other side's messages as read.
@@ -176,6 +220,90 @@ export default function ThreadScreen() {
         ? withoutTemp
         : [...withoutTemp, saved];
     });
+  };
+
+  /** Attach a photo — how people actually describe a job. */
+  const attachImage = async () => {
+    if (!session || !id) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setUploading(true);
+    try {
+      const asset = result.assets[0];
+      // Files live under <thread_id>/… so storage policies can authorise by
+      // thread membership rather than by uploader.
+      const extension = asset.uri.split('.').pop()?.split('?')[0] ?? 'jpg';
+      const path = `${id}/${Date.now()}.${extension}`;
+      const response = await fetch(asset.uri);
+      const bytes = await response.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage
+        .from('chat-attachments')
+        .upload(path, bytes, {
+          contentType: asset.mimeType ?? `image/${extension}`,
+          upsert: false,
+        });
+      if (uploadError) return;
+
+      const { data } = await supabase
+        .from('messages')
+        .insert({
+          thread_id: id,
+          sender_id: session.user.id,
+          body: '📷 Photo',
+          kind: 'image',
+          attachment_path: path,
+          attachment_mime: asset.mimeType ?? `image/${extension}`,
+        })
+        .select('*')
+        .single();
+
+      const { data: signed } = await supabase.storage
+        .from('chat-attachments')
+        .createSignedUrl(path, 3600);
+      if (signed?.signedUrl) {
+        setSignedUrls((current) => ({ ...current, [path]: signed.signedUrl }));
+      }
+      if (data) {
+        const saved = data as ChatMessage;
+        setMessages((current) =>
+          current.some((m) => m.id === saved.id) ? current : [...current, saved],
+        );
+      }
+      successTap();
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  /** Share the booking this conversation is about, as a tappable card. */
+  const shareJobCard = async () => {
+    if (!session || !id || !threadJob) return;
+    lightTap();
+    const { data } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: id,
+        sender_id: session.user.id,
+        body: threadJob.title,
+        kind: 'job_card',
+        job_id: threadJob.id,
+      })
+      .select('*')
+      .single();
+    if (data) {
+      const saved = data as ChatMessage;
+      setMessages((current) =>
+        current.some((m) => m.id === saved.id) ? current : [...current, saved],
+      );
+    }
   };
 
   /** Rows = day separators interleaved with messages. */
@@ -271,9 +399,74 @@ export default function ThreadScreen() {
                     opacity: message.pending ? 0.6 : 1,
                   }}
                 >
-                  <AppText variant="bodySm" style={{ color: mine ? '#FFFFFF' : colors.text }}>
-                    {message.body}
-                  </AppText>
+                  {message.kind === 'image' && message.attachment_path ? (
+                    signedUrls[message.attachment_path] ? (
+                      <Image
+                        source={{ uri: signedUrls[message.attachment_path] }}
+                        style={{ width: 200, height: 200, borderRadius: radius.md }}
+                        resizeMode="cover"
+                        accessibilityLabel="Photo attachment"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: 200,
+                          height: 200,
+                          borderRadius: radius.md,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: colors.surfaceRaised,
+                        }}
+                      >
+                        <ActivityIndicator color={colors.accent} />
+                      </View>
+                    )
+                  ) : message.kind === 'job_card' && message.job_id ? (
+                    // A booking shared into the conversation — tapping opens it.
+                    <Pressable
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open booking ${sharedJobs[message.job_id]?.title ?? ''}`}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/job/[id]',
+                          params: { id: message.job_id as string },
+                        })
+                      }
+                      style={{ gap: space.s2, minWidth: 200 }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+                        <Ionicons
+                          name="briefcase"
+                          size={14}
+                          color={mine ? 'rgba(255,255,255,0.9)' : colors.accent}
+                        />
+                        <AppText
+                          variant="caption"
+                          style={{ color: mine ? 'rgba(255,255,255,0.9)' : colors.accent }}
+                        >
+                          BOOKING
+                        </AppText>
+                      </View>
+                      <AppText
+                        variant="label"
+                        numberOfLines={2}
+                        style={{ color: mine ? '#FFFFFF' : colors.text }}
+                      >
+                        {sharedJobs[message.job_id]?.title ?? message.body}
+                      </AppText>
+                      <AppText
+                        variant="caption"
+                        style={{ color: mine ? 'rgba(255,255,255,0.75)' : colors.textMuted }}
+                      >
+                        {sharedJobs[message.job_id]?.status.replace('_', ' ') ?? 'booking'} · tap
+                        to open
+                      </AppText>
+                    </Pressable>
+                  ) : (
+                    <AppText variant="bodySm" style={{ color: mine ? '#FFFFFF' : colors.text }}>
+                      {message.body}
+                    </AppText>
+                  )}
                 </View>
                 {/* Timestamp + delivery state */}
                 <View
@@ -322,6 +515,51 @@ export default function ThreadScreen() {
           backgroundColor: colors.bg,
         }}
       >
+        {/* Attach a photo */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Attach a photo"
+          onPress={() => void attachImage()}
+          disabled={uploading}
+          style={({ pressed }) => ({
+            width: 40,
+            height: 40,
+            borderRadius: radius.full,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed || uploading ? 0.6 : 1,
+          })}
+        >
+          {uploading ? (
+            <ActivityIndicator size="small" color={colors.accent} />
+          ) : (
+            <Ionicons name="image-outline" size={19} color={colors.accent} />
+          )}
+        </Pressable>
+
+        {/* Share the booking this chat is about */}
+        {threadJob && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share this booking"
+            onPress={() => void shareJobCard()}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: radius.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="briefcase-outline" size={18} color={colors.accent} />
+          </Pressable>
+        )}
+
         <View
           style={{
             flex: 1,
