@@ -365,7 +365,7 @@ export default function HomeScreen() {
                     a row of two 18px icons plus a label, which clipped on a
                     narrow phone and read as an afterthought. */}
                 <View style={{ flexDirection: 'row', gap: space.s3 }}>
-                  <ScalePress haptic onPress={() => router.push('/dashboard')} style={{ flex: 1 }}>
+                  <ScalePress haptic onPress={() => router.push('/dashboard')} containerStyle={{ flex: 1 }}>
                     <View
                       style={{
                         alignItems: 'center',
@@ -384,7 +384,7 @@ export default function HomeScreen() {
                       </AppText>
                     </View>
                   </ScalePress>
-                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
+                  <ScalePress haptic onPress={() => router.push('/earnings')} containerStyle={{ flex: 1 }}>
                     <View
                       style={{
                         alignItems: 'center',

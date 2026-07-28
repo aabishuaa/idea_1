@@ -13,6 +13,11 @@ import { useAuth } from '@/providers/AuthProvider';
  * build since SDK 53), without an EAS project id (SETUP.md §3.3), or on
  * simulators.
  */
+// The effect re-runs on every session change and the hook is mounted by the
+// tabs layout, so an unconditional log printed the same line four times on
+// boot. Say each reason once per app run.
+let noticed = false;
+
 export function usePushRegistration(): void {
   const { session } = useAuth();
 
@@ -20,14 +25,20 @@ export function usePushRegistration(): void {
     if (!session || !Device.isDevice) return;
 
     if (isExpoGo) {
-      console.log('[myB] Push disabled in Expo Go — remote notifications need a dev build.');
+      if (!noticed) {
+        noticed = true;
+        console.log('[myB] Push disabled in Expo Go — remote notifications need a dev build.');
+      }
       return;
     }
 
     const projectId: string | undefined =
       Constants.expoConfig?.extra?.eas?.projectId;
     if (!projectId || projectId.includes('REPLACE_ME')) {
-      console.log('[myB] Push disabled: run `eas init` to set an EAS projectId.');
+      if (!noticed) {
+        noticed = true;
+        console.log('[myB] Push disabled: run `eas init` to set an EAS projectId.');
+      }
       return;
     }
 

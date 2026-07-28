@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useHeaderHeight } from '@react-navigation/elements';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -19,6 +18,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/Text';
 import { EmptyState } from '@/components/ui/states';
 import { lightTap, successTap } from '@/components/ui/animated';
+import { pickImage, uploadTo } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -225,32 +225,21 @@ export default function ThreadScreen() {
   /** Attach a photo — how people actually describe a job. */
   const attachImage = async () => {
     if (!session || !id) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets[0]) return;
+    // Shared picker: asks for permission properly, says so when it is denied,
+    // and returns the bytes rather than a URI we would have to re-read.
+    const image = await pickImage();
+    if (!image) return;
 
     setUploading(true);
     try {
-      const asset = result.assets[0];
       // Files live under <thread_id>/… so storage policies can authorise by
       // thread membership rather than by uploader.
-      const extension = asset.uri.split('.').pop()?.split('?')[0] ?? 'jpg';
-      const path = `${id}/${Date.now()}.${extension}`;
-      const response = await fetch(asset.uri);
-      const bytes = await response.arrayBuffer();
-
-      const { error: uploadError } = await supabase.storage
-        .from('chat-attachments')
-        .upload(path, bytes, {
-          contentType: asset.mimeType ?? `image/${extension}`,
-          upsert: false,
-        });
-      if (uploadError) return;
+      const path = await uploadTo(
+        'chat-attachments',
+        `${id}/${Date.now()}.${image.extension}`,
+        image,
+      );
+      if (!path) return;
 
       const { data } = await supabase
         .from('messages')
@@ -260,7 +249,7 @@ export default function ThreadScreen() {
           body: '📷 Photo',
           kind: 'image',
           attachment_path: path,
-          attachment_mime: asset.mimeType ?? `image/${extension}`,
+          attachment_mime: image.mimeType,
         })
         .select('*')
         .single();

@@ -121,8 +121,10 @@ export function Stagger({
   );
 }
 
-interface ScalePressProps extends PressableProps {
+interface ScalePressProps extends Omit<PressableProps, 'style'> {
   children: React.ReactNode;
+  /** Layout for the outer touchable — use this for flex inside a row. */
+  containerStyle?: StyleProp<ViewStyle>;
   /** Scale while pressed. */
   to?: number;
   haptic?: boolean;
@@ -130,7 +132,14 @@ interface ScalePressProps extends PressableProps {
 }
 
 /** Pressable that springs down slightly — the standard press feedback. */
-export function ScalePress({ children, to = 0.97, haptic = false, style, ...rest }: ScalePressProps) {
+export function ScalePress({
+  children,
+  to = 0.97,
+  haptic = false,
+  style,
+  containerStyle,
+  ...rest
+}: ScalePressProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (value: number) =>
@@ -142,8 +151,16 @@ export function ScalePress({ children, to = 0.97, haptic = false, style, ...rest
     }).start();
 
   return (
+    /*
+      Layout lives on the Pressable, visuals on the animated box inside it.
+      `style` alone went onto the inner view, so `style={{ flex: 1 }}` on a
+      ScalePress inside a row did nothing: the Pressable stayed content-sized
+      and the two "Dashboard / Earnings" tiles bunched up on the left instead
+      of splitting the width. containerStyle is the outer one.
+    */
     <Pressable
       {...rest}
+      style={containerStyle}
       onPressIn={(event) => {
         animateTo(to);
         if (haptic) lightTap();
@@ -154,7 +171,11 @@ export function ScalePress({ children, to = 0.97, haptic = false, style, ...rest
         rest.onPressOut?.(event);
       }}
     >
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
+      <Animated.View
+        style={[{ transform: [{ scale }] }, containerStyle ? { flex: 1 } : null, style]}
+      >
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }
