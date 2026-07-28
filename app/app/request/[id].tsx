@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { JobPhotos } from '@/components/JobPhotos';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
@@ -19,7 +20,7 @@ import { openThread, sendMessage } from '@/lib/threads';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
-import type { IncomingRequest, JobUrgency } from '@/types/db';
+import type { IncomingRequest, JobPhoto, JobUrgency } from '@/types/db';
 
 const URGENCY_COPY: Record<JobUrgency, string> = {
   low: 'Whenever you can fit it in',
@@ -42,6 +43,7 @@ export default function RequestReviewScreen() {
   const { colors } = useTheme();
 
   const [request, setRequest] = useState<IncomingRequest | null>(null);
+  const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'missing'>('loading');
   const [busy, setBusy] = useState<null | 'accept' | 'decline' | 'message'>(null);
   const [note, setNote] = useState('');
@@ -54,9 +56,13 @@ export default function RequestReviewScreen() {
       setPhase('missing');
       return;
     }
-    const { data } = await supabase.rpc('get_incoming_requests');
+    const [{ data }, photosRes] = await Promise.all([
+      supabase.rpc('get_incoming_requests'),
+      supabase.from('job_photos').select('*').eq('job_id', id).order('created_at'),
+    ]);
     const rows = (data as IncomingRequest[] | null) ?? [];
     const found = rows.find((row) => row.id === id) ?? null;
+    setPhotos((photosRes.data as JobPhoto[] | null) ?? []);
     setRequest(found);
     setPhase(found ? 'ready' : 'missing');
   }, [id]);
@@ -243,6 +249,9 @@ export default function RequestReviewScreen() {
                   {request.description}
                 </AppText>
               ) : null}
+              {/* The pro is deciding whether they can do this job — the photo
+                  is often the deciding fact. */}
+              <JobPhotos photos={photos} />
               <View style={{ gap: space.s2, paddingTop: space.s1 }}>
                 <Detail icon="location-outline" label="Where" value={request.parish ?? 'Jamaica'} />
                 <Detail

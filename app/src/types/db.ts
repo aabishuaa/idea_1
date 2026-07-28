@@ -265,3 +265,12 @@ export interface PortfolioItem {
   caption: string;
   created_at: string;
 }
+
+/** A photo attached to a job request (private `job-photos` bucket). */
+export interface JobPhoto {
+  id: string;
+  job_id: string;
+  uploaded_by: string;
+  storage_path: string;
+  created_at: string;
+}

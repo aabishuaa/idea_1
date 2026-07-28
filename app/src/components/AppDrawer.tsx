@@ -192,8 +192,11 @@ export function AppDrawer() {
 
   const accountNav: NavItem[] = [
     { icon: 'person-outline', label: 'Profile', href: '/(tabs)/profile' },
+    // Account (name, photo, password) and your listing are different things;
+    // they used to be the same screen behind two different labels.
+    { icon: 'person-circle-outline', label: 'Account & password', href: '/account' },
     ...(isWorker
-      ? [{ icon: 'briefcase-outline' as const, label: 'Worker profile', href: '/worker-setup' }]
+      ? [{ icon: 'briefcase-outline' as const, label: 'Your work & services', href: '/worker-setup' }]
       : []),
     { icon: 'settings-outline', label: 'Settings', href: '/settings' },
   ];

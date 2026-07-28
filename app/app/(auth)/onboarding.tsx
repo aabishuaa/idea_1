@@ -11,6 +11,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 
+import { RocketMark, Wordmark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Rating } from '@/components/ui/Rating';
@@ -21,6 +22,9 @@ import { FadeSlideIn, lightTap } from '@/components/ui/animated';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { ColorTokens } from '@/theme/tokens';
+
+/** Width of the active (pill) dot; the inactive dot is a circle inside it. */
+const DOT_ACTIVE_WIDTH = 22;
 
 const TRADE_TILES: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { icon: 'water', label: 'Plumbing' },
@@ -238,9 +242,10 @@ export default function OnboardingScreen() {
           paddingHorizontal: space.s4,
         }}
       >
-        <AppText variant="h3" color="accent">
-          myB.
-        </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+          <RocketMark size={30} />
+          <Wordmark variant="h3" />
+        </View>
         {!isLast && (
           <Pressable accessibilityRole="button" onPress={() => goTo(SLIDES.length - 1)} hitSlop={8}>
             <AppText variant="label" color="textMuted">
@@ -311,33 +316,51 @@ export default function OnboardingScreen() {
       >
         {SLIDES.map((slide, index) => {
           const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+          const active = scrollX.interpolate({
+            inputRange,
+            outputRange: [0, 1, 0],
+            extrapolate: 'clamp',
+          });
           return (
-            // The dot grows via scaleX, not width: scrollX drives the native
-            // animated module, which only supports transforms and opacity.
-            <Animated.View
+            /*
+              Two stacked shapes cross-fading, not one shape being stretched.
+              scaleX on a pill scales its corner radius too, so the active dot
+              came out as a stretched lozenge with flattened ends. Fading a
+              correctly-drawn pill over a correctly-drawn dot keeps both
+              geometries honest — and it is still opacity-only, so it stays on
+              the native driver with scrollX.
+            */
+            <View
               key={slide.key}
               style={{
-                width: 8,
+                width: DOT_ACTIVE_WIDTH,
                 height: 8,
-                borderRadius: radius.full,
-                backgroundColor: colors.accent,
                 marginHorizontal: 4,
-                transform: [
-                  {
-                    scaleX: scrollX.interpolate({
-                      inputRange,
-                      outputRange: [1, 3, 1],
-                      extrapolate: 'clamp',
-                    }),
-                  },
-                ],
-                opacity: scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.35, 1, 0.35],
-                  extrapolate: 'clamp',
-                }),
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
-            />
+            >
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: colors.accent,
+                  opacity: active.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0] }),
+                }}
+              />
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: DOT_ACTIVE_WIDTH,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: colors.accent,
+                  opacity: active,
+                }}
+              />
+            </View>
           );
         })}
       </View>

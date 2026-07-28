@@ -5,6 +5,7 @@ import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SwipeToBizBot } from '@/components/SwipeToBizBot';
 import { AppText } from '@/components/ui/Text';
 import { ScalePress, lightTap } from '@/components/ui/animated';
 import { usePushRegistration } from '@/hooks/usePushRegistration';
@@ -172,16 +173,19 @@ export default function TabsLayout() {
   if (!loading && !session) return <Redirect href="/(auth)/onboarding" />;
 
   return (
-    <Tabs
-      tabBar={(props) => (
-        <MybTabBar {...props} unread={unread} pendingRequests={pendingRequests} />
-      )}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="bookings" />
-      <Tabs.Screen name="messages" />
-      <Tabs.Screen name="profile" />
-    </Tabs>
+    // Swipe right-to-left from anywhere in the tabs to reach BizBot (workers).
+    <SwipeToBizBot>
+      <Tabs
+        tabBar={(props) => (
+          <MybTabBar {...props} unread={unread} pendingRequests={pendingRequests} />
+        )}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="bookings" />
+        <Tabs.Screen name="messages" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+    </SwipeToBizBot>
   );
 }

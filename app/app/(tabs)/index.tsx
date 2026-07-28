@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { CategoryGrid } from '@/components/CategoryGrid';
@@ -159,33 +159,32 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Live marketplace pulse — counted from the database, not copy. */}
-            <View
-              style={{
-                flexDirection: 'row',
-                borderRadius: radius.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-                paddingVertical: space.s3,
-              }}
-            >
+            {/* Live marketplace pulse — counted from the database, not copy.
+                Each stat carries its own colour so the row reads as three
+                facts about a living market rather than one grey panel. */}
+            <View style={{ flexDirection: 'row', gap: space.s2 }}>
               <Pulse
                 value={pulse ? formatCount(pulse.pros) : '—'}
                 label="pros listed"
-                icon="people-outline"
+                icon="people"
+                tint={colors.accent}
+                soft={colors.accentSoft}
+                onPress={() => router.push('/search')}
               />
-              <PulseDivider />
               <Pulse
                 value={pulse ? formatCount(pulse.services) : '—'}
                 label="services"
-                icon="construct-outline"
+                icon="color-wand"
+                tint={colors.success}
+                soft={colors.successSoft}
+                onPress={() => router.push('/search')}
               />
-              <PulseDivider />
               <Pulse
                 value={pulse ? formatCount(pulse.reviews) : '—'}
-                label="reviews earned"
-                icon="star-outline"
+                label="reviews"
+                icon="star"
+                tint={colors.star}
+                soft={colors.warningSoft}
               />
             </View>
           </View>
@@ -309,57 +308,6 @@ export default function HomeScreen() {
             </Card>
           )}
 
-          {/* Worker snapshot: level + the doors into the dashboard and earnings */}
-          {profile?.is_worker && workerProfile && (
-            <Card>
-              <View style={{ gap: space.s4 }}>
-                <ProgressBar
-                  label={`Level ${level} · ${level >= 3 ? 'Trusted Pro' : 'Rising'}`}
-                  trailing={`${xp} / ${level * 250} XP`}
-                  progress={(xp % 250) / 250}
-                  helper={`${workerProfile.jobs_completed} jobs completed · rating ${Number(workerProfile.rating_avg).toFixed(1)}`}
-                />
-                <View style={{ flexDirection: 'row', gap: space.s3 }}>
-                  <ScalePress haptic onPress={() => router.push('/dashboard')} style={{ flex: 1 }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: space.s2,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        paddingVertical: space.s3,
-                      }}
-                    >
-                      <Ionicons name="grid-outline" size={18} color={colors.accent} />
-                      <AppText variant="label">Dashboard</AppText>
-                    </View>
-                  </ScalePress>
-                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: space.s2,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.accentSoft,
-                        paddingVertical: space.s3,
-                      }}
-                    >
-                      <Ionicons name="wallet-outline" size={18} color={colors.accent} />
-                      <AppText variant="label" color="accent">
-                        Earnings
-                      </AppText>
-                    </View>
-                  </ScalePress>
-                </View>
-              </View>
-            </Card>
-          )}
-
           {/* BizBot is worker-facing: it answers business-formalization
               questions, which a customer-only account has no use for. */}
           {profile?.is_worker && (
@@ -401,6 +349,64 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </ScalePress>
+          )}
+
+          {/* Worker snapshot: level + the doors into the dashboard and earnings */}
+          {profile?.is_worker && workerProfile && (
+            <Card>
+              <View style={{ gap: space.s4 }}>
+                <ProgressBar
+                  label={`Level ${level} · ${level >= 3 ? 'Trusted Pro' : 'Rising'}`}
+                  trailing={`${xp} / ${level * 250} XP`}
+                  progress={(xp % 250) / 250}
+                  helper={`${workerProfile.jobs_completed} jobs completed · rating ${Number(workerProfile.rating_avg).toFixed(1)}`}
+                />
+                {/* Full-width stacked-icon tiles: the old inline pills were
+                    a row of two 18px icons plus a label, which clipped on a
+                    narrow phone and read as an afterthought. */}
+                <View style={{ flexDirection: 'row', gap: space.s3 }}>
+                  <ScalePress haptic onPress={() => router.push('/dashboard')} style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: space.s2,
+                        borderRadius: radius.md,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        paddingVertical: space.s4,
+                        minHeight: 88,
+                      }}
+                    >
+                      <Ionicons name="grid" size={22} color={colors.accent} />
+                      <AppText variant="label" numberOfLines={1}>
+                        Dashboard
+                      </AppText>
+                    </View>
+                  </ScalePress>
+                  <ScalePress haptic onPress={() => router.push('/earnings')} style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: space.s2,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.accentSoft,
+                        borderWidth: 1,
+                        borderColor: colors.accent,
+                        paddingVertical: space.s4,
+                        minHeight: 88,
+                      }}
+                    >
+                      <Ionicons name="wallet" size={22} color={colors.accent} />
+                      <AppText variant="label" color="accent" numberOfLines={1}>
+                        Earnings
+                      </AppText>
+                    </View>
+                  </ScalePress>
+                </View>
+              </View>
+            </Card>
           )}
 
           {/* Grow prompt for customers who haven't listed their skills yet */}
@@ -514,30 +520,95 @@ function formatCount(value: number): string {
   return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)}k`;
 }
 
+/** One live number, in its own colour, rising into place. */
 function Pulse({
   value,
   label,
   icon,
+  tint,
+  soft,
+  onPress,
 }: {
   value: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  soft: string;
+  onPress?: () => void;
 }) {
-  const { colors } = useTheme();
-  return (
-    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-      <Ionicons name={icon} size={14} color={colors.accent} />
-      <AppText variant="h3">{value}</AppText>
-      <AppText variant="caption" color="textMuted" numberOfLines={1}>
+  const enter = useRef(new Animated.Value(0)).current;
+  const ready = value !== '\u2014';
+
+  useEffect(() => {
+    if (!ready) return;
+    Animated.spring(enter, {
+      toValue: 1,
+      speed: 14,
+      bounciness: 10,
+      useNativeDriver: true,
+    }).start();
+  }, [ready, enter]);
+
+  const body = (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        gap: space.s1,
+        paddingVertical: space.s3,
+        borderRadius: radius.lg,
+        backgroundColor: soft,
+        borderWidth: 1,
+        borderColor: soft,
+      }}
+    >
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          backgroundColor: tint,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons name={icon} size={14} color="#FFFFFF" />
+      </View>
+      <Animated.View
+        style={{
+          opacity: enter,
+          transform: [
+            { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
+          ],
+        }}
+      >
+        <AppText variant="h3" style={{ color: tint }}>
+          {value}
+        </AppText>
+      </Animated.View>
+      <AppText
+        variant="caption"
+        color="textMuted"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ fontSize: 11 }}
+      >
         {label}
       </AppText>
     </View>
   );
-}
 
-function PulseDivider() {
-  const { colors } = useTheme();
-  return <View style={{ width: 1, backgroundColor: colors.border, marginVertical: space.s1 }} />;
+  if (!onPress) return body;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${value} ${label}`}
+      onPress={onPress}
+      style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.8 : 1 })}
+    >
+      {body}
+    </Pressable>
+  );
 }
 
 async function markSuggestionRead(suggestion: AppNotification, then: () => void) {
