@@ -124,6 +124,11 @@ interface CategoryGridProps {
   onSelect: (slug: string) => void;
   /** Tiles to show (default 8 — a 4×2 grid). */
   limit?: number;
+  /**
+   * Keep the caller's ordering instead of applying the featured order. Used
+   * when the list already arrives ranked (e.g. by booking demand).
+   */
+  preserveOrder?: boolean;
   columns?: number;
   /** Horizontal padding already applied by the parent screen. */
   screenPadding?: number;
@@ -138,6 +143,7 @@ export function CategoryGrid({
   trades,
   onSelect,
   limit = 8,
+  preserveOrder = false,
   columns = 4,
   screenPadding = space.s4,
 }: CategoryGridProps) {
@@ -148,7 +154,7 @@ export function CategoryGrid({
   const available = width - screenPadding * 2;
   const tileWidth = Math.floor((available - gap * (columns - 1)) / columns);
 
-  const visible = orderTrades(trades).slice(0, limit);
+  const visible = (preserveOrder ? trades : orderTrades(trades)).slice(0, limit);
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>

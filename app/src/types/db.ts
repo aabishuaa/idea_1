@@ -86,6 +86,8 @@ export interface Job {
   agreed_price_jmd: number | null;
   status: JobStatus;
   requested_at: string;
+  /** When the worker first answered — powers the response-time stat. */
+  responded_at: string | null;
   completed_at: string | null;
 }
 

@@ -155,6 +155,41 @@ export default function DashboardScreen() {
   });
   const max = Math.max(1, ...series.map((point) => point.value));
 
+  // The two stats from the desktop mockup, derived from the jobs we already
+  // have rather than stored anywhere.
+  const responded = jobs.filter((job) => job.responded_at != null && job.requested_at);
+  const avgResponseMins =
+    responded.length > 0
+      ? Math.round(
+          responded.reduce(
+            (sum, job) =>
+              sum +
+              (new Date(job.responded_at as string).getTime() -
+                new Date(job.requested_at).getTime()) /
+                60000,
+            0,
+          ) / responded.length,
+        )
+      : null;
+  const responseLabel =
+    avgResponseMins == null
+      ? '—'
+      : avgResponseMins < 60
+        ? `${avgResponseMins} min`
+        : `${Math.round(avgResponseMins / 60)} hr`;
+
+  // Repeat clients: the share of counterparties seen more than once.
+  const counterKey = lens === 'hiring' ? 'worker_id' : 'customer_id';
+  const counts = new Map<string, number>();
+  completed.forEach((job) => {
+    const key = job[counterKey as 'worker_id' | 'customer_id'];
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  const repeatShare =
+    counts.size > 0
+      ? Math.round(([...counts.values()].filter((n) => n > 1).length / counts.size) * 100)
+      : 0;
+
   const spendWord = lens === 'hiring' ? 'spent' : 'earned';
   const xp = Math.round(Number(worker?.reputation ?? 0) * 10);
   const level = Math.min(4, Math.floor(xp / 250) + 1);
@@ -239,6 +274,21 @@ export default function DashboardScreen() {
                   : Number(worker?.rating_avg ?? 0).toFixed(1)
               }
               label={lens === 'hiring' ? 'Saved pros' : 'Average rating'}
+            />
+          </View>
+
+          {/* Response time + repeat clients (design: worker dashboard) */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s3 }}>
+            <StatTile
+              icon="flash-outline"
+              value={responseLabel}
+              label={lens === 'hiring' ? 'Average reply from pros' : 'Your average response time'}
+            />
+            <StatTile
+              icon="repeat-outline"
+              value={`${repeatShare}%`}
+              label={lens === 'hiring' ? 'Pros you rebooked' : 'Repeat clients'}
+              tone="success"
             />
           </View>
 

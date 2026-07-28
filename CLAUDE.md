@@ -37,7 +37,14 @@ Keep the system to exactly three surfaces. Do not introduce additional microserv
 | --- | --- |
 | Expo app (React Native) | All UI. On-device liveness challenge. Talks to Supabase directly and to the AI service for face-match + RAG. |
 | Supabase | Postgres (+ PostGIS + pgvector), Auth, Storage, Realtime, Edge Functions, Row Level Security. Owns all business data and most logic. |
-| AI service (Python / FastAPI) | Face embedding + cosine match. RAG retrieval/generation orchestration. The only Python surface. |
+| AI service (Python / FastAPI) | Face embedding + cosine match. Optional semantic RAG retrieval. The only Python surface. |
+
+**BizBot RAG runs in a Supabase edge function** (`functions/bizbot`), not the Python
+service. Retrieval is Postgres full-text over `kb_chunks` (`search_kb`), generation is
+Gemini→Groq. This was a deliberate change: routing BizBot through Python meant it was
+dead whenever that service was not deployed, and the free-tier cold start made it
+unusable for a demo. The Python service remains an optional fallback that adds pgvector
+semantic retrieval when it is running.
 
 **Rule:** business/data logic defaults to Supabase (SQL functions, RLS, edge functions).
 Python-native work (face embeddings, RAG) lives in the FastAPI service. Don't put
@@ -79,8 +86,16 @@ functions.
 - Customer describes a job in plain language → LLM extracts `{job_type, location, urgency, budget}` as structured JSON.
 - MVP is rules-based, not ML: a weighted score across skill relevance, geo proximity
   (PostGIS `ST_Distance`), reputation score, availability, and job-completion history.
+- Search must work with NO embeddings and NO LLM key. `match_workers(p_query => …)`
+  does Postgres full-text + trigram + per-trade synonym matching, so "tutor",
+  "someone to braid my hair" and "mi sink a leak under di counter" all resolve.
+  Never make discovery depend on an external service.
 - Semantic skill matching: embed service descriptions in pgvector so "my sink is
-  leaking" matches a plumber without exact keywords. This is a core differentiator — keep it.
+  leaking" matches a plumber without exact keywords. This layers on top of the text
+  search as an enhancement — a differentiator, but never the only path.
+- The service taxonomy is the whole informal economy, not the building trades:
+  tutors, hairdressers, cooks, seamstresses, caregivers, phone repair, drivers.
+  Trades carry a `category` and colloquial `synonyms` (migration 0014).
 - Do NOT introduce ML ranking models in the MVP.
 
 ### 4.2 Reputation Intelligence & Trust
@@ -189,7 +204,7 @@ supabase start                            # local stack
 supabase db push                          # apply migrations to linked project
 supabase db reset                         # local: re-run migrations + seed
 supabase functions serve                  # run edge functions locally
-supabase functions deploy extract-intent embed-text keepwarm
+supabase functions deploy extract-intent embed-text keepwarm bizbot
 ```
 
 ## 9. When unsure
