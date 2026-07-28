@@ -7,6 +7,7 @@ import { Pressable, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { CategoryGrid } from '@/components/CategoryGrid';
 import { WorkerCard } from '@/components/WorkerCard';
+import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -17,6 +18,7 @@ import { FadeSlideIn, ScalePress, Skeleton, Stagger } from '@/components/ui/anim
 import { formatDateTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { useRequests } from '@/providers/RequestsProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { AppNotification, Job, MatchedWorker, Trade, WorkerProfile } from '@/types/db';
@@ -46,6 +48,10 @@ export default function HomeScreen() {
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
   const [alerts, setAlerts] = useState(0);
+  const [pulse, setPulse] = useState<{ pros: number; services: number; reviews: number } | null>(
+    null,
+  );
+  const { count: waiting } = useRequests();
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -84,6 +90,20 @@ export default function HomeScreen() {
     setRecentJobs((jobsRes.data as Job[] | null) ?? []);
     setWorkerProfile((workerRes.data as WorkerProfile | null) ?? null);
     setAlerts(('count' in unreadRes ? unreadRes.count : 0) ?? 0);
+
+    // The marketplace, in three real numbers. Counted, never hardcoded — a
+    // pitch slide that claims scale should be reading the same database the
+    // demo is running on.
+    const [proCountRes, serviceCountRes, reviewCountRes] = await Promise.all([
+      supabase.from('worker_profiles').select('user_id', { count: 'exact', head: true }),
+      supabase.from('trades').select('slug', { count: 'exact', head: true }),
+      supabase.from('reviews').select('id', { count: 'exact', head: true }),
+    ]);
+    setPulse({
+      pros: proCountRes.count ?? 0,
+      services: serviceCountRes.count ?? 0,
+      reviews: reviewCountRes.count ?? 0,
+    });
   }, [session, profile?.is_worker]);
 
   useFocusEffect(
@@ -110,15 +130,106 @@ export default function HomeScreen() {
           {/* App bar: ☰ · myB. · notifications · search */}
           <AppHeader alerts={alerts} />
 
-          {/* Greeting */}
-          <View style={{ gap: 2 }}>
-            <AppText variant="h2">
-              {greeting()}, {firstName}! 👋
-            </AppText>
-            <AppText variant="bodySm" color="textMuted">
-              Find trusted skilled professionals near you.
-            </AppText>
+          {/* Hero: who you are, what's live, what the market looks like.
+              The first screen has to say more than hello — it is where the
+              three pillars have to be legible: a reputation you own, a market
+              you can search, a path to being formal. */}
+          <View style={{ gap: space.s4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+              <Avatar name={profile?.full_name ?? 'myB'} uri={profile?.avatar_url} size="md" />
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText variant="caption" color="textMuted">
+                  {greeting()}
+                </AppText>
+                <AppText variant="h2" numberOfLines={1}>
+                  {firstName}
+                </AppText>
+              </View>
+              <View
+                style={{
+                  paddingHorizontal: space.s3,
+                  paddingVertical: space.s1,
+                  borderRadius: radius.full,
+                  backgroundColor: colors.accentSoft,
+                }}
+              >
+                <AppText variant="caption" color="accent">
+                  {profile?.is_worker ? 'Pro' : 'Customer'}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Live marketplace pulse — counted from the database, not copy. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingVertical: space.s3,
+              }}
+            >
+              <Pulse
+                value={pulse ? formatCount(pulse.pros) : '—'}
+                label="pros listed"
+                icon="people-outline"
+              />
+              <PulseDivider />
+              <Pulse
+                value={pulse ? formatCount(pulse.services) : '—'}
+                label="services"
+                icon="construct-outline"
+              />
+              <PulseDivider />
+              <Pulse
+                value={pulse ? formatCount(pulse.reviews) : '—'}
+                label="reviews earned"
+                icon="star-outline"
+              />
+            </View>
           </View>
+
+          {/* Requests waiting — the most urgent thing a pro can see, so it
+              sits above everything the app wants them to do. */}
+          {waiting > 0 && (
+            <ScalePress haptic onPress={() => router.push('/(tabs)/bookings')}>
+              <LinearGradient
+                colors={[colors.primary, colors.accent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  borderRadius: radius.lg,
+                  padding: space.s4,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.s3,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: radius.md,
+                    backgroundColor: 'rgba(255,255,255,0.22)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="hand-left" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label" style={{ color: '#FFFFFF' }}>
+                    {waiting === 1 ? '1 job request waiting' : `${waiting} job requests waiting`}
+                  </AppText>
+                  <AppText variant="bodySm" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                    Answering quickly lifts your reputation score.
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+              </LinearGradient>
+            </ScalePress>
+          )}
 
           {/* Search */}
           <Pressable accessibilityRole="button" onPress={() => router.push('/search')}>
@@ -395,6 +506,38 @@ export default function HomeScreen() {
       </View>
     </Screen>
   );
+}
+
+/** 1124 → "1.1k". Keeps three stats on one line on a small phone. */
+function formatCount(value: number): string {
+  if (value < 1000) return String(value);
+  return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)}k`;
+}
+
+function Pulse({
+  value,
+  label,
+  icon,
+}: {
+  value: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+      <Ionicons name={icon} size={14} color={colors.accent} />
+      <AppText variant="h3">{value}</AppText>
+      <AppText variant="caption" color="textMuted" numberOfLines={1}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function PulseDivider() {
+  const { colors } = useTheme();
+  return <View style={{ width: 1, backgroundColor: colors.border, marginVertical: space.s1 }} />;
 }
 
 async function markSuggestionRead(suggestion: AppNotification, then: () => void) {

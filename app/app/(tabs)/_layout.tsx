@@ -10,6 +10,7 @@ import { ScalePress, lightTap } from '@/components/ui/animated';
 import { usePushRegistration } from '@/hooks/usePushRegistration';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { useRequests } from '@/providers/RequestsProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 
@@ -28,13 +29,21 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 /** Mobile tab bar from the design system: 4 tabs + raised center action. */
-function MybTabBar({ state, navigation, unread }: BottomTabBarProps & { unread: number }) {
+function MybTabBar({
+  state,
+  navigation,
+  unread,
+  pendingRequests,
+}: BottomTabBarProps & { unread: number; pendingRequests: number }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const renderTab = (routeName: string, index: number) => {
     const focused = state.index === index;
-    const badge = routeName === 'messages' ? unread : 0;
+    // Bookings carries the count of requests still waiting on an answer — the
+    // worker should see there is work to respond to without opening the tab.
+    const badge =
+      routeName === 'messages' ? unread : routeName === 'bookings' ? pendingRequests : 0;
     return (
       <Pressable
         key={routeName}
@@ -67,7 +76,7 @@ function MybTabBar({ state, navigation, unread }: BottomTabBarProps & { unread: 
                 height: 17,
                 borderRadius: 9,
                 paddingHorizontal: 4,
-                backgroundColor: colors.primary,
+                backgroundColor: routeName === 'bookings' ? colors.warning : colors.primary,
                 borderWidth: 1.5,
                 borderColor: colors.surface,
                 alignItems: 'center',
@@ -139,6 +148,7 @@ function MybTabBar({ state, navigation, unread }: BottomTabBarProps & { unread: 
 
 export default function TabsLayout() {
   const { session, loading } = useAuth();
+  const { count: pendingRequests } = useRequests();
   const [unread, setUnread] = useState(0);
   usePushRegistration();
 
@@ -163,7 +173,9 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <MybTabBar {...props} unread={unread} />}
+      tabBar={(props) => (
+        <MybTabBar {...props} unread={unread} pendingRequests={pendingRequests} />
+      )}
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" />

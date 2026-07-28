@@ -1,44 +1,66 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Modal, Pressable, View } from 'react-native';
 
+import { PortfolioGrid } from '@/components/PortfolioGrid';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge, Chip } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { Rating } from '@/components/ui/Rating';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
+import { FadeSlideIn, lightTap, successTap } from '@/components/ui/animated';
 import { ErrorState, LoadingState } from '@/components/ui/states';
-import { lightTap, successTap } from '@/components/ui/animated';
 import { formatRate, timeAgo } from '@/lib/format';
+import { pickImage, publicUrl, uploadUserImage, type PickedImage } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
+import { openThread } from '@/lib/threads';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
-import type { Profile, Review, ServiceDescription, WorkerProfile } from '@/types/db';
+import type {
+  PortfolioItem,
+  Profile,
+  Review,
+  ServiceDescription,
+  WorkerProfile,
+} from '@/types/db';
 
 interface WorkerDetail {
   profile: Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'identity_verified'>;
   worker: WorkerProfile;
   services: ServiceDescription[];
   reviews: (Review & { reviewer: { full_name: string } | null })[];
+  portfolio: PortfolioItem[];
 }
 
-/** Pro profile (design 06): identity, services, bio, rate + Book now. */
+/**
+ * The pro's profile — built as a portfolio, not a record card.
+ *
+ * An informal tradesperson has no CV and no company website. This screen is
+ * the substitute: their face, their work, what people said, and a reputation
+ * score they earned and own. Photos come first because they are the fastest
+ * honest signal a customer can read.
+ */
 export default function WorkerProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { session } = useAuth();
-  const { colors } = useTheme();
+  const { session, refreshProfile } = useAuth();
+  const { colors, isDark } = useTheme();
   const [detail, setDetail] = useState<WorkerDetail | null>(null);
   const [failed, setFailed] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [pending, setPending] = useState<PickedImage | null>(null);
+  const [caption, setCaption] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setFailed(false);
-    const [profileRes, workerRes, servicesRes, reviewsRes] = await Promise.all([
+    const [profileRes, workerRes, servicesRes, reviewsRes, portfolioRes] = await Promise.all([
       supabase
         .from('profiles')
         .select('id, full_name, avatar_url, identity_verified')
@@ -52,6 +74,11 @@ export default function WorkerProfileScreen() {
         .eq('worker_id', id)
         .order('created_at', { ascending: false })
         .limit(10),
+      supabase
+        .from('portfolio_items')
+        .select('*')
+        .eq('user_id', id)
+        .order('created_at', { ascending: false }),
     ]);
 
     if (session) {
@@ -78,9 +105,10 @@ export default function WorkerProfileScreen() {
         avatar_url: null,
         identity_verified: false,
       },
-      worker: workerRes.data as WorkerProfile,
+      worker: workerRow,
       services: (servicesRes.data as ServiceDescription[] | null) ?? [],
       reviews: (reviewsRes.data as WorkerDetail['reviews'] | null) ?? [],
+      portfolio: (portfolioRes.data as PortfolioItem[] | null) ?? [],
     });
     // session intentionally omitted: the favourite state reloads on toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,146 +157,410 @@ export default function WorkerProfileScreen() {
     );
   }
 
-  const { profile, worker, services, reviews } = detail;
+  const { profile, worker, services, reviews, portfolio } = detail;
   const isSelf = session?.user.id === worker.user_id;
 
+  /** Own profile: change the photo people see first. */
+  const changeAvatar = async () => {
+    if (!session || !isSelf) return;
+    const image = await pickImage({ square: true });
+    if (!image) return;
+    setUploading(true);
+    // Same filename every time so old avatars do not accumulate; a cache
+    // buster on the URL keeps the new one from being masked by the old.
+    const path = await uploadUserImage('portfolios', session.user.id, image, 'avatar');
+    if (path) {
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: `${publicUrl('portfolios', path)}?v=${Date.now()}` })
+        .eq('id', session.user.id);
+      await refreshProfile();
+      successTap();
+      void load();
+    }
+    setUploading(false);
+  };
+
+  /** Pick first, caption second, then it goes up — one confirm, no edit step. */
+  const startAddWork = async () => {
+    const image = await pickImage();
+    if (!image) return;
+    setCaption('');
+    setPending(image);
+  };
+
+  const confirmAddWork = async () => {
+    if (!session || !pending) return;
+    setUploading(true);
+    const path = await uploadUserImage('portfolios', session.user.id, pending);
+    if (path) {
+      await supabase.rpc('add_portfolio_item', { p_path: path, p_caption: caption.trim() });
+      successTap();
+      void load();
+    }
+    setUploading(false);
+    setPending(null);
+    setCaption('');
+  };
+
+  const removeWork = async (item: PortfolioItem) => {
+    if (!session) return;
+    await supabase.from('portfolio_items').delete().eq('id', item.id);
+    await supabase.storage.from('portfolios').remove([item.storage_path]);
+    void load();
+  };
+
+  const years = worker.years_experience;
+
   return (
-    <Screen>
-      <View style={{ gap: space.s5 }}>
-        <View style={{ alignItems: 'center', gap: space.s3 }}>
-          {!isSelf && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={saved ? 'Remove from favourites' : 'Save to favourites'}
-              accessibilityState={{ selected: saved }}
-              onPress={() => void toggleSaved()}
-              hitSlop={8}
-              style={({ pressed }) => ({
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                width: 40,
-                height: 40,
+    <Screen padded={false}>
+      {/* ── Cover ─────────────────────────────────────────────────────── */}
+      <View style={{ height: 118 }}>
+        <LinearGradient
+          colors={
+            isDark ? [colors.primary, '#0B0E16'] : [colors.primary, colors.accent]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
+        />
+        {!isSelf && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Remove from favourites' : 'Save to favourites'}
+            accessibilityState={{ selected: saved }}
+            onPress={() => void toggleSaved()}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              right: space.s4,
+              top: space.s4,
+              width: 40,
+              height: 40,
+              borderRadius: radius.full,
+              backgroundColor: 'rgba(0,0,0,0.28)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons
+              name={saved ? 'heart' : 'heart-outline'}
+              size={20}
+              color={saved ? colors.error : '#FFFFFF'}
+            />
+          </Pressable>
+        )}
+      </View>
+
+      <View style={{ paddingHorizontal: space.s4, gap: space.s5, paddingBottom: space.s12 }}>
+        {/* ── Identity, overlapping the cover ─────────────────────────── */}
+        <View style={{ marginTop: -44, gap: space.s3 }}>
+          <Pressable
+            accessibilityRole={isSelf ? 'button' : 'image'}
+            accessibilityLabel={isSelf ? 'Change your photo' : `${profile.full_name}'s photo`}
+            disabled={!isSelf}
+            onPress={changeAvatar}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            <View
+              style={{
                 borderRadius: radius.full,
-                borderWidth: 1,
-                borderColor: saved ? colors.error : colors.border,
-                backgroundColor: saved ? colors.errorSoft : colors.surface,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.7 : 1,
-              })}
+                borderWidth: 4,
+                borderColor: colors.bg,
+              }}
             >
-              <Ionicons
-                name={saved ? 'heart' : 'heart-outline'}
-                size={20}
-                color={saved ? colors.error : colors.textMuted}
-              />
-            </Pressable>
-          )}
-          <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
-          <View style={{ alignItems: 'center', gap: space.s1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-              <AppText variant="h2">{profile.full_name}</AppText>
-              {worker.tier_skill && <Badge kind="topPro" />}
+              <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
+              {isSelf && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    right: -2,
+                    bottom: -2,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: colors.primary,
+                    borderWidth: 2,
+                    borderColor: colors.bg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="camera" size={14} color="#FFFFFF" />
+                </View>
+              )}
             </View>
-            {profile.identity_verified && <Badge kind="verified" />}
+          </Pressable>
+
+          <View style={{ gap: space.s2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-              <Rating value={Number(worker.rating_avg)} count={worker.rating_count} />
+              <AppText variant="h2" style={{ flexShrink: 1 }}>
+                {profile.full_name}
+              </AppText>
+              {profile.identity_verified && <Badge kind="verified" compact />}
+              {worker.tier_skill && <Badge kind="topPro" compact />}
+              {worker.tier_business && <Badge kind="pro" compact />}
+            </View>
+            {worker.headline ? (
+              <AppText variant="body" color="accent">
+                {worker.headline}
+              </AppText>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s1 }}>
+              <Ionicons name="location-outline" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color="textMuted">
-                · {worker.jobs_completed} jobs · {worker.parish}
+                {worker.parish}
+              </AppText>
+              <View
+                style={{
+                  width: 3,
+                  height: 3,
+                  borderRadius: 2,
+                  backgroundColor: colors.textMuted,
+                  marginHorizontal: space.s1,
+                }}
+              />
+              <AppText
+                variant="bodySm"
+                style={{ color: worker.available ? colors.success : colors.textMuted }}
+              >
+                {worker.available ? 'Available now' : worker.availability_note || 'Busy'}
               </AppText>
             </View>
           </View>
         </View>
 
-        {services.length > 0 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2, justifyContent: 'center' }}>
-            {services.map((service) => (
-              <Chip key={service.id} label={service.title} />
-            ))}
+        {/* ── Stats strip ─────────────────────────────────────────────── */}
+        <FadeSlideIn>
+          <View
+            style={{
+              flexDirection: 'row',
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              paddingVertical: space.s3,
+            }}
+          >
+            <Stat value={String(worker.jobs_completed)} label="jobs done" />
+            <Divider />
+            <Stat
+              value={Number(worker.rating_avg) > 0 ? Number(worker.rating_avg).toFixed(1) : '—'}
+              label={`${worker.rating_count} review${worker.rating_count === 1 ? '' : 's'}`}
+              star
+            />
+            <Divider />
+            <Stat value={years > 0 ? `${years}y` : 'New'} label="experience" />
           </View>
-        )}
+        </FadeSlideIn>
 
-        {worker.bio ? (
-          <AppText variant="body" color="textMuted" style={{ textAlign: 'center' }}>
-            {worker.bio}
-          </AppText>
-        ) : null}
-
-        {/* Rate + book (design: rate card with primary CTA) */}
-        <Card raised>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View>
-              <AppText variant="h3" color="accent">
-                {formatRate(worker.rate_min_jmd, worker.rate_max_jmd, worker.rate_unit)}
-              </AppText>
-              <AppText variant="caption" color="textMuted">
-                {worker.available ? 'Available now' : worker.availability_note || 'Limited availability'}
-              </AppText>
-            </View>
-            {!isSelf && (
+        {/* ── Actions ─────────────────────────────────────────────────── */}
+        {isSelf ? (
+          <Button
+            title="Edit profile & services"
+            variant="secondary"
+            icon="create-outline"
+            fullWidth
+            onPress={() => router.push('/worker-setup')}
+          />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: space.s3 }}>
+            <View style={{ flex: 1 }}>
               <Button
                 title="Book now"
+                icon="calendar"
+                fullWidth
                 onPress={() =>
                   router.push({ pathname: '/job/new', params: { workerId: worker.user_id } })
                 }
               />
-            )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Message"
+                variant="secondary"
+                icon="chatbubble-ellipses-outline"
+                fullWidth
+                onPress={async () => {
+                  if (!session) return;
+                  const threadId = await openThread({
+                    customerId: session.user.id,
+                    workerId: worker.user_id,
+                  });
+                  if (threadId) router.push(`/thread/${threadId}`);
+                }}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* ── Rate ────────────────────────────────────────────────────── */}
+        <Card raised>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <View style={{ gap: 2 }}>
+              <AppText variant="overline" color="textMuted">
+                Typical rate
+              </AppText>
+              <AppText variant="h3" color="accent">
+                {formatRate(worker.rate_min_jmd, worker.rate_max_jmd, worker.rate_unit)}
+              </AppText>
+            </View>
+            <View
+              style={{
+                alignItems: 'center',
+                gap: 2,
+                paddingLeft: space.s4,
+                borderLeftWidth: 1,
+                borderLeftColor: colors.border,
+              }}
+            >
+              <AppText variant="overline" color="textMuted">
+                Reputation
+              </AppText>
+              <AppText variant="h3">{Number(worker.reputation).toFixed(0)}</AppText>
+            </View>
           </View>
         </Card>
 
-        {!isSelf && (
-          <Button
-            title="Message"
-            variant="secondary"
-            fullWidth
-            onPress={async () => {
-              if (!session) return;
-              // Find or create the thread, then open the chat.
-              const { data: existing } = await supabase
-                .from('threads')
-                .select('id')
-                .eq('customer_id', session.user.id)
-                .eq('worker_id', worker.user_id)
-                .maybeSingle();
-              if (existing) {
-                router.push(`/thread/${existing.id}`);
-                return;
-              }
-              const { data: created } = await supabase
-                .from('threads')
-                .insert({ customer_id: session.user.id, worker_id: worker.user_id })
-                .select('id')
-                .single();
-              if (created) router.push(`/thread/${created.id}`);
-            }}
-          />
+        {/* ── What I do ───────────────────────────────────────────────── */}
+        {services.length > 0 && (
+          <View style={{ gap: space.s3 }}>
+            <AppText variant="overline" color="textMuted">
+              What I do
+            </AppText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
+              {services.map((service) => (
+                <Chip key={service.id} label={service.title} />
+              ))}
+            </View>
+          </View>
         )}
 
+        {worker.bio ? (
+          <AppText variant="body" color="textMuted">
+            {worker.bio}
+          </AppText>
+        ) : null}
+
+        {/* ── The work ────────────────────────────────────────────────── */}
+        <PortfolioGrid
+          items={portfolio}
+          editable={isSelf}
+          uploading={uploading}
+          onAdd={startAddWork}
+          onDelete={removeWork}
+        />
+
+        {/* ── Reviews ─────────────────────────────────────────────────── */}
         {reviews.length > 0 && (
-          <View style={{ gap: space.s4 }}>
-            <AppText variant="h3">Reviews</AppText>
-            {reviews.map((review) => (
-              <Card key={review.id}>
-                <View style={{ gap: space.s2 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <AppText variant="label">{review.reviewer?.full_name ?? 'Customer'}</AppText>
-                    <AppText variant="caption" color="textMuted">
-                      {timeAgo(review.created_at)}
-                    </AppText>
+          <View style={{ gap: space.s3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+              <Ionicons name="chatbox-ellipses-outline" size={16} color={colors.textMuted} />
+              <AppText variant="overline" color="textMuted" style={{ flex: 1 }}>
+                What customers said
+              </AppText>
+              <Rating value={Number(worker.rating_avg)} count={worker.rating_count} />
+            </View>
+            {reviews.map((review, index) => (
+              <FadeSlideIn key={review.id} delay={Math.min(index, 6) * 40}>
+                <Card>
+                  <View style={{ gap: space.s2 }}>
+                    <View
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s2 }}
+                    >
+                      <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>
+                        {review.reviewer?.full_name ?? 'Customer'}
+                      </AppText>
+                      <AppText variant="caption" color="textMuted">
+                        {timeAgo(review.created_at)}
+                      </AppText>
+                    </View>
+                    <Rating value={review.rating} />
+                    {review.comment ? (
+                      <AppText variant="bodySm" color="textMuted">
+                        {review.comment}
+                      </AppText>
+                    ) : null}
                   </View>
-                  <Rating value={review.rating} />
-                  {review.comment ? (
-                    <AppText variant="bodySm" color="textMuted">
-                      {review.comment}
-                    </AppText>
-                  ) : null}
-                </View>
-              </Card>
+                </Card>
+              </FadeSlideIn>
             ))}
           </View>
         )}
       </View>
+
+      {/* Caption sheet for a photo about to be added */}
+      <Modal
+        visible={pending !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPending(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              padding: space.s5,
+              gap: space.s4,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+              {pending && (
+                <Image
+                  source={{ uri: pending.uri }}
+                  style={{ width: 72, height: 72, borderRadius: radius.md }}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText variant="h3">Add to your work</AppText>
+                <AppText variant="caption" color="textMuted">
+                  Say what it was — customers scan captions.
+                </AppText>
+              </View>
+            </View>
+            <Input
+              placeholder="e.g. Full bathroom refit, Portmore"
+              value={caption}
+              onChangeText={setCaption}
+              maxLength={80}
+            />
+            <Button
+              title="Add photo"
+              fullWidth
+              loading={uploading}
+              onPress={confirmAddWork}
+            />
+            <Button title="Cancel" variant="text" fullWidth onPress={() => setPending(null)} />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
+}
+
+function Stat({ value, label, star = false }: { value: string; label: string; star?: boolean }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+        {star && <Ionicons name="star" size={14} color={colors.star} />}
+        <AppText variant="h3">{value}</AppText>
+      </View>
+      <AppText variant="caption" color="textMuted" numberOfLines={1}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function Divider() {
+  const { colors } = useTheme();
+  return <View style={{ width: 1, backgroundColor: colors.border, marginVertical: space.s1 }} />;
 }

@@ -81,16 +81,7 @@ export default function IdUploadScreen() {
       }
 
       // Service unreachable → continue in demo mode rather than dead-ending.
-      const { error: recordError } = await supabase
-        .from('verification_records')
-        .upsert(
-          {
-            user_id: session.user.id,
-            id_captured_at: new Date().toISOString(),
-            status: 'id_captured',
-          },
-          { onConflict: 'user_id' },
-        );
+      const { error: recordError } = await supabase.rpc('record_id_captured');
       setPhase('idle');
       if (recordError) {
         setError('Could not save your progress. Please try again.');

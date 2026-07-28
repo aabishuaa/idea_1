@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/badges';
@@ -9,12 +9,13 @@ import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
-import { Stagger } from '@/components/ui/animated';
+import { Stagger, successTap } from '@/components/ui/animated';
+import { pickImage, publicUrl, uploadUserImage } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
-import { space } from '@/theme/tokens';
-import type { WorkerProfile } from '@/types/db';
+import { radius, space } from '@/theme/tokens';
+import type { PortfolioItem, WorkerProfile } from '@/types/db';
 
 interface MenuRow {
   icon: keyof typeof Ionicons.glyphMap;
@@ -28,15 +29,26 @@ export default function ProfileScreen() {
   const { profile, signOut, refreshProfile } = useAuth();
   const { colors, isDark, setPreference } = useTheme();
   const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     await refreshProfile();
     if (!profile?.id) return;
-    const { data } = await supabase
-      .from('worker_profiles')
-      .select('*')
-      .eq('user_id', profile.id)
-      .maybeSingle<WorkerProfile>();
+    const [{ data }, portfolioRes] = await Promise.all([
+      supabase
+        .from('worker_profiles')
+        .select('*')
+        .eq('user_id', profile.id)
+        .maybeSingle<WorkerProfile>(),
+      supabase
+        .from('portfolio_items')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(6),
+    ]);
+    setPortfolio((portfolioRes.data as PortfolioItem[] | null) ?? []);
     setWorkerProfile(data ?? null);
     // refreshProfile intentionally omitted from deps: focus-triggered reload only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,6 +61,25 @@ export default function ProfileScreen() {
   );
 
   if (!profile) return <Screen safeTop scroll={false}>{null}</Screen>;
+
+  /** The photo people see first, changed from where they look for it. */
+  const changeAvatar = async () => {
+    const image = await pickImage({ square: true });
+    if (!image) return;
+    setUploading(true);
+    // One filename so old avatars do not pile up; the cache buster stops the
+    // previous image from being served in its place.
+    const path = await uploadUserImage('portfolios', profile.id, image, 'avatar');
+    if (path) {
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: `${publicUrl('portfolios', path)}?v=${Date.now()}` })
+        .eq('id', profile.id);
+      successTap();
+      await load();
+    }
+    setUploading(false);
+  };
 
   // Level from the portable reputation score (deterministic, explainable):
   // XP = reputation × 10 (0–1000), 250 XP per level.
@@ -107,7 +138,35 @@ export default function ProfileScreen() {
         <Stagger interval={70} gap={space.s6}>
         {/* Identity header */}
         <View style={{ alignItems: 'center', gap: space.s3, paddingTop: space.s4 }}>
-          <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change your photo"
+            onPress={changeAvatar}
+            disabled={uploading}
+          >
+            <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
+            <View
+              style={{
+                position: 'absolute',
+                right: -2,
+                bottom: -2,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                backgroundColor: colors.primary,
+                borderWidth: 2,
+                borderColor: colors.bg,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="camera" size={14} color="#FFFFFF" />
+              )}
+            </View>
+          </Pressable>
           <View style={{ alignItems: 'center', gap: space.s1 }}>
             <AppText variant="h2">{profile.full_name}</AppText>
             <AppText variant="bodySm" color="textMuted">
@@ -120,6 +179,51 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Your public portfolio — what a customer actually sees. Workers
+            consistently underestimate this page, so surface it with the work
+            already on it and a direct way in. */}
+        {workerProfile && (
+          <Card
+            onPress={() => router.push({ pathname: '/worker/[id]', params: { id: profile.id } })}
+          >
+            <View style={{ gap: space.s3 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+                <Ionicons name="images-outline" size={18} color={colors.accent} />
+                <AppText variant="label" style={{ flex: 1 }}>
+                  Your public profile
+                </AppText>
+                <AppText variant="caption" color="accent">
+                  {portfolio.length > 0 ? `${portfolio.length} photos` : 'Add work'}
+                </AppText>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </View>
+
+              {portfolio.length > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 3 }}>
+                  {portfolio.slice(0, 5).map((item) => (
+                    <Image
+                      key={item.id}
+                      source={{ uri: publicUrl('portfolios', item.storage_path) }}
+                      style={{
+                        flex: 1,
+                        aspectRatio: 1,
+                        borderRadius: radius.sm,
+                        backgroundColor: colors.surfaceRaised,
+                      }}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
+              ) : (
+                <AppText variant="caption" color="textMuted">
+                  Photos of finished jobs are the fastest way to win work — customers pick the
+                  pro they can picture doing it.
+                </AppText>
+              )}
+            </View>
+          </Card>
+        )}
 
         {/* Level / reputation progress (worker) */}
         {workerProfile && (
