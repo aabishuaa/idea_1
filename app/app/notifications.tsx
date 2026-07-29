@@ -4,9 +4,10 @@ import React, { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
+import { Chip } from '@/components/ui/badges';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/Text';
-import { FadeSlideIn, Skeleton } from '@/components/ui/animated';
+import { FadeSlideIn, Skeleton, lightTap } from '@/components/ui/animated';
 import { EmptyState } from '@/components/ui/states';
 import { timeAgo } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +25,35 @@ const ICONS: Record<AppNotification['type'], keyof typeof Ionicons.glyphMap> = {
   verification_result: 'shield-checkmark',
   system: 'information-circle',
 };
+
+/**
+ * Which notifications are asking something of you.
+ *
+ * A finished job produces a notification for the other side, which is correct
+ * — but those pile up and bury the two kinds that actually need a person: a
+ * new request, and a new message. Splitting the list is the difference between
+ * an inbox and a log.
+ */
+const ACTIONABLE: AppNotification['type'][] = [
+  'job_request',
+  'new_message',
+  'formalization_suggestion',
+  'verification_result',
+];
+
+/** Icon tint per type, so a completed job does not look like a new request. */
+type Tone = 'accent' | 'success' | 'warning';
+const TONES: Record<AppNotification['type'], Tone> = {
+  job_request: 'warning',
+  job_status: 'accent',
+  new_message: 'accent',
+  new_review: 'success',
+  formalization_suggestion: 'success',
+  verification_result: 'success',
+  system: 'accent',
+};
+
+type Filter = 'all' | 'needs' | 'updates';
 
 /** Where a notification takes you when tapped. */
 function destinationFor(item: AppNotification): string | null {
@@ -50,6 +80,7 @@ export default function NotificationsScreen() {
   const { session } = useAuth();
   const { colors } = useTheme();
   const [items, setItems] = useState<AppNotification[] | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -108,6 +139,16 @@ export default function NotificationsScreen() {
   }
 
   const unreadCount = items.filter((item) => !item.read_at).length;
+  const needsCount = items.filter(
+    (item) => ACTIONABLE.includes(item.type) && !item.read_at,
+  ).length;
+
+  const visible =
+    filter === 'all'
+      ? items
+      : filter === 'needs'
+        ? items.filter((item) => ACTIONABLE.includes(item.type))
+        : items.filter((item) => !ACTIONABLE.includes(item.type));
 
   return (
     <Screen>
@@ -138,7 +179,42 @@ export default function NotificationsScreen() {
               )}
             </View>
 
-            {items.map((item, index) => (
+            <View style={{ flexDirection: 'row', gap: space.s2, flexWrap: 'wrap' }}>
+              <Chip
+                label={`All (${items.length})`}
+                selected={filter === 'all'}
+                onPress={() => {
+                  lightTap();
+                  setFilter('all');
+                }}
+              />
+              <Chip
+                label={`Needs you${needsCount > 0 ? ` (${needsCount})` : ''}`}
+                selected={filter === 'needs'}
+                onPress={() => {
+                  lightTap();
+                  setFilter('needs');
+                }}
+              />
+              <Chip
+                label="Job updates"
+                selected={filter === 'updates'}
+                onPress={() => {
+                  lightTap();
+                  setFilter('updates');
+                }}
+              />
+            </View>
+
+            {visible.length === 0 && (
+              <AppText variant="bodySm" color="textMuted" style={{ textAlign: 'center' }}>
+                {filter === 'needs'
+                  ? 'Nothing is waiting on you.'
+                  : 'No job updates yet.'}
+              </AppText>
+            )}
+
+            {visible.map((item, index) => (
               <FadeSlideIn key={item.id} delay={Math.min(index, 8) * 50}>
                 <Card raised={!item.read_at} onPress={() => void open(item)}>
                   <View style={{ flexDirection: 'row', gap: space.s3, alignItems: 'flex-start' }}>
@@ -147,7 +223,9 @@ export default function NotificationsScreen() {
                         width: 38,
                         height: 38,
                         borderRadius: radius.md,
-                        backgroundColor: item.read_at ? colors.surfaceRaised : colors.accentSoft,
+                        backgroundColor: item.read_at
+                          ? colors.surfaceRaised
+                          : tintSoft(colors, TONES[item.type]),
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -155,7 +233,7 @@ export default function NotificationsScreen() {
                       <Ionicons
                         name={ICONS[item.type] ?? 'notifications'}
                         size={18}
-                        color={item.read_at ? colors.textMuted : colors.accent}
+                        color={item.read_at ? colors.textMuted : tint(colors, TONES[item.type])}
                       />
                     </View>
                     <View style={{ flex: 1, gap: 2 }}>
@@ -191,4 +269,19 @@ export default function NotificationsScreen() {
       </View>
     </Screen>
   );
+}
+
+function tint(colors: { accent: string; success: string; warning: string }, tone: Tone): string {
+  return tone === 'success' ? colors.success : tone === 'warning' ? colors.warning : colors.accent;
+}
+
+function tintSoft(
+  colors: { accentSoft: string; successSoft: string; warningSoft: string },
+  tone: Tone,
+): string {
+  return tone === 'success'
+    ? colors.successSoft
+    : tone === 'warning'
+      ? colors.warningSoft
+      : colors.accentSoft;
 }

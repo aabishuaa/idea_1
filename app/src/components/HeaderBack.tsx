@@ -5,7 +5,7 @@ import { Pressable } from 'react-native';
 
 import { lightTap } from './ui/animated';
 import { useTheme } from '@/theme/ThemeContext';
-import { space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 
 /**
  * A back arrow that is always there.
@@ -34,6 +34,40 @@ export function HeaderBack() {
       })}
     >
       <Ionicons name="chevron-back" size={26} color={colors.text} />
+    </Pressable>
+  );
+}
+
+/**
+ * A way home from any stack screen.
+ *
+ * Deep flows (verification → liveness → result, formalize → checklist → step)
+ * stack up several screens, and tapping back four times to reach the tabs is
+ * not navigation. The gesture-driven sidebar covers the tabs; this covers
+ * everywhere else.
+ */
+export function HeaderHome() {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Go to home"
+      hitSlop={12}
+      onPress={() => {
+        lightTap();
+        router.replace('/(tabs)');
+      }}
+      style={({ pressed }) => ({
+        width: 32,
+        height: 32,
+        borderRadius: radius.full,
+        backgroundColor: colors.accentSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Ionicons name="home" size={17} color={colors.accent} />
     </Pressable>
   );
 }

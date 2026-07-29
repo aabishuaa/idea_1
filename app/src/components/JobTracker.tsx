@@ -36,12 +36,19 @@ const STEPS: Step[] = [
   },
 ];
 
-/** How far along the four-step track each status sits. */
-const REACHED: Record<JobStatus, number> = {
-  requested: 0,
-  accepted: 1,
-  in_progress: 2,
-  completed: 3,
+/**
+ * How many of the four steps are FINISHED at each status.
+ *
+ * This used to be "index of the current step", which meant a completed job sat
+ * at index 3 with step 3 merely *current* — so the last rail stayed grey and
+ * the track never actually reached Completed. Counting finished steps makes
+ * the terminal state a full track, which is what the screen is claiming.
+ */
+const DONE_THROUGH: Record<JobStatus, number> = {
+  requested: 1,
+  accepted: 2,
+  in_progress: 3,
+  completed: 4,
   declined: 0,
   cancelled: 0,
 };
@@ -55,7 +62,7 @@ const REACHED: Record<JobStatus, number> = {
  */
 export function JobTracker({ job }: { job: Job }) {
   const { colors } = useTheme();
-  const reached = REACHED[job.status];
+  const doneThrough = DONE_THROUGH[job.status];
   const ended = job.status === 'declined' || job.status === 'cancelled';
 
   const fill = useRef(new Animated.Value(0)).current;
@@ -68,7 +75,7 @@ export function JobTracker({ job }: { job: Job }) {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [fill, reached]);
+  }, [fill, doneThrough]);
 
   useEffect(() => {
     if (ended || job.status === 'completed') {
@@ -139,22 +146,24 @@ export function JobTracker({ job }: { job: Job }) {
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         {STEPS.map((step, index) => {
-          const passed = index < reached;
-          const current = index === reached;
-          const tint = passed || current ? colors.accent : colors.textMuted;
+          const done = index < doneThrough;
+          const current = index === doneThrough;
+          const last = index === STEPS.length - 1;
+          const tint = done || current ? colors.accent : colors.textMuted;
           const stamp = step.at(job);
 
           return (
             <View key={step.key} style={{ flex: 1, alignItems: 'center', gap: space.s2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
-                {/* rail in */}
+                {/* Rail in: filled once this step has been reached at all. */}
                 <Animated.View
                   style={{
                     flex: 1,
                     height: 2,
                     borderRadius: 1,
-                    backgroundColor: index > 0 && passed ? colors.accent : colors.border,
-                    opacity: index === 0 ? 0 : passed ? fill : 1,
+                    backgroundColor:
+                      index > 0 && (done || current) ? colors.accent : colors.border,
+                    opacity: index === 0 ? 0 : done || current ? fill : 1,
                   }}
                 />
                 <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -188,26 +197,27 @@ export function JobTracker({ job }: { job: Job }) {
                       borderRadius: 14,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: passed || current ? colors.accent : colors.surfaceRaised,
+                      backgroundColor: done || current ? colors.accent : colors.surfaceRaised,
                       borderWidth: 1,
-                      borderColor: passed || current ? colors.accent : colors.border,
+                      borderColor: done || current ? colors.accent : colors.border,
                     }}
                   >
+                    {/* The finish line keeps its trophy; the rest tick off. */}
                     <Ionicons
-                      name={passed ? 'checkmark' : step.icon}
+                      name={done && !last ? 'checkmark' : step.icon}
                       size={14}
-                      color={passed || current ? '#FFFFFF' : colors.textMuted}
+                      color={done || current ? '#FFFFFF' : colors.textMuted}
                     />
                   </View>
                 </View>
-                {/* rail out */}
+                {/* Rail out: filled once the NEXT step has been reached. */}
                 <Animated.View
                   style={{
                     flex: 1,
                     height: 2,
                     borderRadius: 1,
-                    backgroundColor: index < reached ? colors.accent : colors.border,
-                    opacity: index === STEPS.length - 1 ? 0 : index < reached ? fill : 1,
+                    backgroundColor: index < doneThrough ? colors.accent : colors.border,
+                    opacity: last ? 0 : index < doneThrough ? fill : 1,
                   }}
                 />
               </View>
@@ -220,7 +230,7 @@ export function JobTracker({ job }: { job: Job }) {
                 >
                   {step.label}
                 </AppText>
-                {stamp && (passed || current) ? (
+                {stamp && (done || current) ? (
                   <AppText variant="caption" color="textMuted" style={{ fontSize: 10 }}>
                     {new Date(stamp).toLocaleDateString('en-JM', {
                       day: 'numeric',

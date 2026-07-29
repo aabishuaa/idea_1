@@ -28,6 +28,11 @@ export function successTap() {
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 }
 
+/** For outcomes that are final but not good — a decline, a cancellation. */
+export function warnTap() {
+  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+}
+
 interface FadeSlideInProps {
   children: React.ReactNode;
   /** Delay in ms before the entrance starts (stagger sections with this). */

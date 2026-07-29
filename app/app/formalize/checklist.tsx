@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
@@ -221,9 +221,19 @@ export default function ChecklistScreen() {
                             />
                           </Pressable>
 
+                          {/* Tapping the row opens the full step — what it is,
+                              what to bring, what it costs — rather than just
+                              unfolding two more lines of the same summary. */}
                           <Pressable
                             style={{ flex: 1, gap: 4 }}
-                            onPress={() => setExpanded(open ? null : step.id)}
+                            accessibilityRole="button"
+                            onLongPress={() => setExpanded(open ? null : step.id)}
+                            onPress={() =>
+                              router.push({
+                                pathname: '/formalize/step/[id]',
+                                params: { id: String(step.id) },
+                              })
+                            }
                           >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
                               <AppText

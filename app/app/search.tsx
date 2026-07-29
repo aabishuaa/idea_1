@@ -14,6 +14,7 @@ import { extractIntent } from '@/lib/edge';
 import { logEvent } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { useJobDraft } from '@/providers/JobDraftProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { MatchedWorker, Trade } from '@/types/db';
@@ -44,6 +45,7 @@ const EXAMPLE_QUERIES = [
  * the edge function is reachable — enhancement, never dependency.
  */
 export default function SearchScreen() {
+  const { draft, hasDraft } = useJobDraft();
   const params = useLocalSearchParams<{ trade?: string; q?: string }>();
   const { profile } = useAuth();
   const { colors } = useTheme();
@@ -188,6 +190,35 @@ export default function SearchScreen() {
             actionTitle="Try again"
             onAction={() => void run(submitted, trade, parish)}
           />
+        )}
+
+        {/* A request already written: say so, so picking a pro reads as the
+            last step rather than the start of a second form. */}
+        {hasDraft && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s3,
+              marginHorizontal: space.s4,
+              padding: space.s3,
+              borderRadius: radius.md,
+              backgroundColor: colors.accentSoft,
+            }}
+          >
+            <Ionicons name="document-text-outline" size={18} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="caption" color="accent">
+                Your request is ready
+              </AppText>
+              <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                {draft.title || draft.description}
+              </AppText>
+            </View>
+            <AppText variant="caption" color="textMuted">
+              Pick a pro →
+            </AppText>
+          </View>
         )}
 
         {/* Nothing searched yet: suggest phrasings and let people browse. */}
