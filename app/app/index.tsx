@@ -12,18 +12,22 @@ import { space } from '@/theme/tokens';
 /**
  * Splash: the rocket launches, the logo lands, then we route.
  *
- * The hold covers the whole sequence plus a beat to actually READ the name —
- * the launch alone runs ~1.5s, and cutting away the moment it finished meant
- * the brand flashed past before anyone could take it in. The redirect still
- * waits on the session restore too, so a slow network never truncates it.
+ * The hold covers the whole sequence plus a beat to actually READ the name.
+ * The launch runs ~2.8s (ignition, a held beat, liftoff, the logo settling),
+ * and the hold gives it another ~2.6s to land before we route away — cutting
+ * at the end of the animation meant the brand was gone the instant it
+ * arrived. The redirect still waits on the session restore as well, so a slow
+ * network never truncates the sequence.
  */
+/** Long enough for the launch to finish and the wordmark to be read. */
+const SPLASH_HOLD_MS = 5400;
 export default function SplashScreen() {
   const { session, loading } = useAuth();
   const { colors } = useTheme();
   const [minDelayDone, setMinDelayDone] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setMinDelayDone(true), 3200);
+    const timer = setTimeout(() => setMinDelayDone(true), SPLASH_HOLD_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -42,7 +46,8 @@ export default function SplashScreen() {
     >
       <RocketLaunch />
       <View style={{ position: 'absolute', bottom: space.s16 }}>
-        <FadeSlideIn delay={1900} duration={600} from="none">
+        {/* Arrives after the logo has settled, so the two do not compete. */}
+        <FadeSlideIn delay={3100} duration={700} from="none">
           <AppText variant="overline" color="textMuted">
             All you need. One place.
           </AppText>

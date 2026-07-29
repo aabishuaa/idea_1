@@ -17,12 +17,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
 import type { ServiceDescription, Trade, WorkerProfile } from '@/types/db';
-
-const PARISHES = [
-  'Kingston', 'St. Andrew', 'St. Catherine', 'St. James', 'Manchester',
-  'Clarendon', 'St. Ann', 'Portland', 'St. Thomas', 'St. Mary', 'Trelawny',
-  'Hanover', 'Westmoreland', 'St. Elizabeth',
-];
+import { LOCATIONS } from '@/lib/parishes';
 
 /**
  * Your work (FR-PROF-1/4) — the listing customers search.
@@ -221,7 +216,7 @@ export default function WorkerSetupScreen() {
             Where do you work?
           </AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
-            {PARISHES.map((name) => (
+            {LOCATIONS.map((name) => (
               <Chip
                 key={name}
                 label={name}

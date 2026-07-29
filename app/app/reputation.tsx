@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Share, View } from 'react-native';
+import { Alert, Share, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +12,7 @@ import { AppText } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/badges';
 import { FadeSlideIn, Skeleton, Stagger } from '@/components/ui/animated';
 import { EmptyState } from '@/components/ui/states';
+import { shareReputationPassport } from '@/features/reputation/passport';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/theme/ThemeContext';
@@ -85,6 +86,7 @@ export default function ReputationScreen() {
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [reputation, setReputation] = useState<ReputationRow | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -107,7 +109,49 @@ export default function ReputationScreen() {
     }, [load]),
   );
 
-  const share = async () => {
+  /**
+   * Export the record as a PDF document.
+   *
+   * It used to be nine lines of plain text in a share sheet. That is fine for a
+   * WhatsApp group and no use at all for the job this feature exists to do:
+   * give a worker with no payslip something a loan officer or a landlord will
+   * accept as evidence. A "portable reputation" that arrives as an SMS is not
+   * portable in any sense that matters.
+   *
+   * The text version survives as the fallback, because a device that cannot
+   * print should still be able to send something.
+   */
+  const exportRecord = async () => {
+    if (!worker) return;
+    setExporting(true);
+    const result = await shareReputationPassport({
+      name: profile?.full_name ?? 'myB pro',
+      headline: worker.headline,
+      parish: worker.parish,
+      score: Number(worker.reputation),
+      ratingAvg: Number(worker.rating_avg),
+      ratingCount: worker.rating_count,
+      jobsCompleted: worker.jobs_completed,
+      identityVerified: Boolean(profile?.identity_verified),
+      memberSince: profile?.created_at ?? null,
+      calculatedAt: reputation?.calculated_at ?? null,
+      components: reputation?.components ?? {},
+    });
+    setExporting(false);
+
+    if (result.ok) return;
+    Alert.alert(
+      'Could not create the PDF',
+      `${result.message}\n\nSend it as text instead?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send as text', onPress: () => void shareAsText() },
+      ],
+    );
+  };
+
+  /** The fallback. Kept deliberately — see exportRecord. */
+  const shareAsText = async () => {
     if (!worker) return;
     const lines = [
       `${profile?.full_name ?? 'myB pro'} — myB reputation record`,
@@ -294,14 +338,24 @@ export default function ReputationScreen() {
           </Card>
 
           <Button
-            title="Share my reputation record"
+            title="Download my reputation record"
+            icon="document-text-outline"
+            fullWidth
+            loading={exporting}
+            onPress={() => void exportRecord()}
+          />
+          <Button
+            title="Send as a text summary"
+            variant="secondary"
             icon="share-outline"
             fullWidth
-            onPress={() => void share()}
+            onPress={() => void shareAsText()}
           />
 
           <AppText variant="caption" color="textMuted" style={{ textAlign: 'center' }}>
-            Shared as plain text you control — myB never sends your record anywhere on its own.
+            A one-page PDF built on your phone, showing the score and exactly how it
+            was calculated — the document you hand a bank, a landlord or a big
+            customer. myB never sends your record anywhere on its own.
           </AppText>
         </Stagger>
       </View>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { BrandLockup } from '@/components/BrandMark';
+import { SocialSignIn } from '@/components/SocialSignIn';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -121,6 +122,12 @@ export default function SignInScreen() {
             loading={busy}
             disabled={!email.trim() || !password}
           />
+
+          {/* Signing in with an account you already have means one fewer
+              password to invent and forget. A forgotten password on a shared
+              phone is a lost account, and a lost account takes the worker's
+              reputation record with it. */}
+          <SocialSignIn onSignedIn={() => router.replace('/(tabs)')} />
 
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.s1 }}>
             <AppText variant="bodySm" color="textMuted">

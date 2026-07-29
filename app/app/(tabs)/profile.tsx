@@ -17,6 +17,24 @@ import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { PortfolioItem, WorkerProfile } from '@/types/db';
 
+/*
+  Avatar + camera-badge geometry. Derived, not eyeballed — see the comment at
+  the Pressable for why the previous hand-picked offsets put the badge inside
+  the photo.
+
+  AVATAR_PX must match Avatar's 'xl' size. The badge centre sits
+  (AVATAR_PX/2 + BADGE_PX/2) from the avatar centre along the 45° diagonal,
+  which is √2 × BADGE_OFFSET_AXIS on each axis, leaving ~1px of overlap so the
+  badge reads as attached to the photo rather than floating beside it.
+*/
+const AVATAR_PX = 88;
+const BADGE_PX = 28;
+/** Room on every side so the badge never overflows the parent (Android clips). */
+const AVATAR_INSET = 10;
+const AVATAR_BOX = AVATAR_PX + AVATAR_INSET * 2;
+/** Per-axis distance from the avatar's top-left to the badge's top-left. */
+const BADGE_OFFSET = AVATAR_INSET + 70;
+
 interface MenuRow {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -138,23 +156,45 @@ export default function ProfileScreen() {
         <Stagger interval={70} gap={space.s6}>
         {/* Identity header */}
         <View style={{ alignItems: 'center', gap: space.s3, paddingTop: space.s4 }}>
+          {/*
+            The camera badge sits on the OUTSIDE edge of the photo.
+
+            It used to be pinned to right:-2/bottom:-2 of the avatar, but the
+            avatar is a circle inscribed in a square box: the box corner is
+            ~14px further out than the circle's edge on the diagonal, so
+            "just past the corner" landed a long way INSIDE the photo. The
+            badge has to be placed against the circle, not the box.
+
+            AVATAR_PX is the circle (Avatar 'xl'), so its centre is at
+            AVATAR_PX/2 with radius AVATAR_PX/2. Sitting the badge tangent to
+            that means offsetting its centre by (r + badgeRadius) along the
+            45° diagonal. The wrapper is deliberately larger than the avatar so
+            the badge stays inside its parent's bounds — Android clips
+            absolutely-positioned children that overflow, so negative offsets
+            would work on iOS and silently crop here.
+          */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Change your photo"
             onPress={changeAvatar}
             disabled={uploading}
+            style={{ width: AVATAR_BOX, height: AVATAR_BOX }}
           >
-            <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
+            <View style={{ position: 'absolute', left: AVATAR_INSET, top: AVATAR_INSET }}>
+              <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />
+            </View>
             <View
               style={{
                 position: 'absolute',
-                right: -2,
-                bottom: -2,
-                width: 30,
-                height: 30,
-                borderRadius: 15,
+                left: BADGE_OFFSET,
+                top: BADGE_OFFSET,
+                width: BADGE_PX,
+                height: BADGE_PX,
+                borderRadius: BADGE_PX / 2,
                 backgroundColor: colors.primary,
-                borderWidth: 2,
+                // A ring in the page colour is what separates the badge from
+                // the photo behind it; 2px read as a dark outline, not a gap.
+                borderWidth: 3,
                 borderColor: colors.bg,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -163,7 +203,7 @@ export default function ProfileScreen() {
               {uploading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons name="camera" size={14} color="#FFFFFF" />
+                <Ionicons name="camera" size={15} color="#FFFFFF" />
               )}
             </View>
           </Pressable>
