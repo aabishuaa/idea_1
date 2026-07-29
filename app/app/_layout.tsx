@@ -66,9 +66,10 @@ function RootStack() {
         <Stack.Screen name="verification/id-upload" options={{ title: 'Your ID' }} />
         <Stack.Screen name="verification/liveness" options={{ title: 'Liveness check' }} />
         <Stack.Screen name="verification/result" options={{ title: 'Result' }} />
-        <Stack.Screen name="formalize/index" options={{ title: 'Formalize' }} />
+        <Stack.Screen name="formalize/index" options={{ title: 'Your pathway' }} />
         <Stack.Screen name="formalize/questionnaire" options={{ title: 'Readiness check' }} />
         <Stack.Screen name="formalize/checklist" options={{ title: 'Your checklist' }} />
+        <Stack.Screen name="formalize/step/[id]" options={{ title: 'Step' }} />
         <Stack.Screen name="formalize/bizbot" options={{ title: 'BizBot' }} />
       </Stack>
     </>

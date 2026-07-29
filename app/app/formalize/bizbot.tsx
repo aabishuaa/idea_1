@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { FlatList, Linking, Pressable, View } from 'react-native';
 
@@ -28,6 +29,7 @@ const SUGGESTED = ['Do I need a TRN?', 'What is GCT?', 'How do I register my bus
  * this chat never generates checklists or fees.
  */
 export default function BizBotScreen() {
+  const { q } = useLocalSearchParams<{ q?: string }>();
   const { profile } = useAuth();
   const { colors } = useTheme();
   const listRef = useRef<FlatList<BotMessage>>(null);
@@ -39,7 +41,7 @@ export default function BizBotScreen() {
         "Wah gwaan! Mi a BizBot 🤝 Ask me anything about making your business official — TRN, registration, taxes, NIS. I answer from official sources and show you where it comes from.",
     },
   ]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(q ?? '');
   const [busy, setBusy] = useState(false);
 
   const ask = async (question: string) => {
