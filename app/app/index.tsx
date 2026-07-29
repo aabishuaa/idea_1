@@ -10,11 +10,12 @@ import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
 
 /**
- * Splash: the rocket launches, the wordmark lands, then we route.
+ * Splash: the rocket launches, the logo lands, then we route.
  *
- * The hold is long enough to see the launch through (~1.9s) but the redirect
- * still waits on the session restore, so a slow network never truncates it and
- * a fast one never makes it feel like a stutter.
+ * The hold covers the whole sequence plus a beat to actually READ the name —
+ * the launch alone runs ~1.5s, and cutting away the moment it finished meant
+ * the brand flashed past before anyone could take it in. The redirect still
+ * waits on the session restore too, so a slow network never truncates it.
  */
 export default function SplashScreen() {
   const { session, loading } = useAuth();
@@ -22,7 +23,7 @@ export default function SplashScreen() {
   const [minDelayDone, setMinDelayDone] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setMinDelayDone(true), 1900);
+    const timer = setTimeout(() => setMinDelayDone(true), 3200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -41,7 +42,7 @@ export default function SplashScreen() {
     >
       <RocketLaunch />
       <View style={{ position: 'absolute', bottom: space.s16 }}>
-        <FadeSlideIn delay={1400} duration={500} from="none">
+        <FadeSlideIn delay={1900} duration={600} from="none">
           <AppText variant="overline" color="textMuted">
             All you need. One place.
           </AppText>

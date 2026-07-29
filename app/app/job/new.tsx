@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { PersonLink } from '@/components/PersonLink';
 import { Chip } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -46,6 +46,7 @@ export default function NewJobScreen() {
   const { colors } = useTheme();
   const { draft, hasDraft, setDraft, clearDraft } = useJobDraft();
   const [workerName, setWorkerName] = useState<string | null>(null);
+  const [workerAvatar, setWorkerAvatar] = useState<string | null>(null);
   const [description, setDescription] = useState(draft.description);
   const [title, setTitle] = useState(draft.title);
   const [urgency, setUrgency] = useState<JobUrgency>(draft.urgency);
@@ -72,10 +73,13 @@ export default function NewJobScreen() {
     if (!params.workerId) return;
     supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, avatar_url')
       .eq('id', params.workerId)
       .maybeSingle()
-      .then(({ data }) => setWorkerName(data?.full_name ?? null));
+      .then(({ data }) => {
+        setWorkerName(data?.full_name ?? null);
+        setWorkerAvatar(data?.avatar_url ?? null);
+      });
   }, [params.workerId]);
 
   // Trade labels make a far better title than a slug ("Plumbing job in
@@ -224,17 +228,16 @@ export default function NewJobScreen() {
             </AppText>
           </View>
 
-          {workerName && (
+          {/* Check them before you commit — the profile is one tap from the
+              confirm screen, not something you have to go back for. */}
+          {workerName && params.workerId && (
             <Card raised>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-                <Avatar name={workerName} size="md" />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <AppText variant="label">{workerName}</AppText>
-                  <AppText variant="caption" color="textMuted">
-                    Will get this request on their phone right away
-                  </AppText>
-                </View>
-              </View>
+              <PersonLink
+                id={params.workerId}
+                name={workerName}
+                avatarUrl={workerAvatar}
+                subtitle="Tap to see their work and reviews first"
+              />
             </Card>
           )}
 
@@ -316,14 +319,15 @@ export default function NewJobScreen() {
   return (
     <Screen>
       <View style={{ gap: space.s5 }}>
-        {workerName && (
+        {workerName && params.workerId && (
           <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-              <Avatar name={workerName} size="sm" />
-              <AppText variant="bodySm" color="textMuted">
-                Requesting <AppText variant="label">{workerName}</AppText>
-              </AppText>
-            </View>
+            <PersonLink
+              id={params.workerId}
+              name={workerName}
+              avatarUrl={workerAvatar}
+              size="sm"
+              subtitle="Requesting this pro · tap to view"
+            />
           </Card>
         )}
 

@@ -54,6 +54,7 @@ function RootStack() {
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="worker/[id]" options={{ title: 'Profile' }} />
+        <Stack.Screen name="person/[id]" options={{ title: 'Profile' }} />
         <Stack.Screen name="job/new" options={{ title: 'Request a job' }} />
         <Stack.Screen name="job/[id]" options={{ title: 'Booking' }} />
         <Stack.Screen name="request/[id]" options={{ title: 'Job request' }} />
@@ -71,6 +72,7 @@ function RootStack() {
         <Stack.Screen name="formalize/checklist" options={{ title: 'Your checklist' }} />
         <Stack.Screen name="formalize/step/[id]" options={{ title: 'Step' }} />
         <Stack.Screen name="formalize/bizbot" options={{ title: 'BizBot' }} />
+        <Stack.Screen name="formalize/chats" options={{ title: 'Saved chats' }} />
       </Stack>
     </>
   );

@@ -84,10 +84,13 @@ export default function NotificationsScreen() {
 
   const load = useCallback(async () => {
     if (!session) return;
+    // Unread only: a notification centre is a queue, not an archive. Once you
+    // have opened something it has done its job.
     const { data } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', session.user.id)
+      .is('read_at', null)
       .order('created_at', { ascending: false })
       .limit(50);
     setItems((data as AppNotification[] | null) ?? []);
@@ -99,18 +102,21 @@ export default function NotificationsScreen() {
     }, [load]),
   );
 
+  /*
+    Opening a notification consumes it.
+
+    Marking it "read" but leaving it in place meant the list only ever grew —
+    you dealt with something and it still sat there looking like it needed
+    you. It disappears now, which is what tapping it means. Nothing is lost:
+    the thing it points AT (the booking, the message) is still there.
+  */
   const open = async (item: AppNotification) => {
+    setItems((current) => current?.filter((row) => row.id !== item.id) ?? null);
     if (!item.read_at) {
       await supabase
         .from('notifications')
         .update({ read_at: new Date().toISOString() })
         .eq('id', item.id);
-      setItems(
-        (current) =>
-          current?.map((row) =>
-            row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row,
-          ) ?? null,
-      );
     }
     const destination = destinationFor(item);
     if (destination) router.push(destination as never);
@@ -138,7 +144,6 @@ export default function NotificationsScreen() {
     );
   }
 
-  const unreadCount = items.filter((item) => !item.read_at).length;
   const needsCount = items.filter(
     (item) => ACTIONABLE.includes(item.type) && !item.read_at,
   ).length;
@@ -155,8 +160,8 @@ export default function NotificationsScreen() {
       <View style={{ gap: space.s4 }}>
         {items.length === 0 ? (
           <EmptyState
-            title="No notifications yet"
-            message="Booking updates, new messages and reviews will appear here."
+            title="All caught up"
+            message="Booking updates, new messages and reviews land here. Opening one clears it."
           />
         ) : (
           <>
@@ -168,12 +173,12 @@ export default function NotificationsScreen() {
               }}
             >
               <AppText variant="bodySm" color="textMuted">
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                {items.length === 1 ? '1 notification' : `${items.length} notifications`}
               </AppText>
-              {unreadCount > 0 && (
+              {items.length > 0 && (
                 <Pressable accessibilityRole="button" onPress={() => void markAllRead()} hitSlop={8}>
                   <AppText variant="bodySm" color="accent">
-                    Mark all read
+                    Clear all
                   </AppText>
                 </Pressable>
               )}

@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   View,
@@ -46,7 +47,12 @@ export function AppDrawer() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const panelWidth = Math.min(320, width * 0.86);
+  /*
+    Leave a real strip of backdrop. At 86% the dismiss area was a thumb-width
+    sliver, and content still ran into the panel's own edge — which is what
+    was clipping the badge.
+  */
+  const panelWidth = Math.min(324, width * 0.82);
   const progress = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
@@ -98,6 +104,29 @@ export function AppDrawer() {
       });
     }
   }, [open, progress, load, mounted]);
+
+  /*
+    Swipe the panel back off the screen.
+
+    Swiping → opens the drawer (EdgeGestures), so swiping ← on the open panel
+    has to close it or the gesture only works in one direction. Claimed only
+    on a clearly horizontal leftward drag, so the menu still scrolls
+    vertically.
+  */
+  const dismissPan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          gesture.dx < -14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dx < -60) {
+            lightTap();
+            closeDrawer();
+          }
+        },
+      }),
+    [closeDrawer],
+  );
 
   const go = (href: string) => {
     lightTap();
@@ -218,10 +247,16 @@ export function AppDrawer() {
       })}
     >
       <Ionicons name={item.icon} size={20} color={colors.accent} />
-      <View style={{ flex: 1 }}>
-        <AppText variant="label">{item.label}</AppText>
+      {/* minWidth: 0 so long hints truncate inside the row instead of pushing
+          the chevron and badge past the panel edge. Two lines, because
+          "TRN, GCT, registration — plain answers" cut at "plain ans…" told
+          you nothing. */}
+      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+        <AppText variant="label" numberOfLines={1}>
+          {item.label}
+        </AppText>
         {item.hint ? (
-          <AppText variant="caption" color="textMuted" numberOfLines={1}>
+          <AppText variant="caption" color="textMuted" numberOfLines={2}>
             {item.hint}
           </AppText>
         ) : null}
@@ -292,6 +327,7 @@ export function AppDrawer() {
             },
           ],
         }}
+        {...dismissPan.panHandlers}
       >
         <LinearGradient
           colors={[colors.accentSoft, 'transparent']}
@@ -303,31 +339,84 @@ export function AppDrawer() {
           contentContainerStyle={{
             paddingTop: insets.top + space.s4,
             paddingBottom: insets.bottom + space.s6,
-            paddingHorizontal: space.s3,
+            // Left inset for a landscape notch; a little more breathing room
+            // on the right so nothing sits flush against the panel border.
+            paddingLeft: Math.max(insets.left, space.s3),
+            paddingRight: space.s4,
             gap: space.s4,
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Identity */}
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => go('/(tabs)/profile')}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3, padding: space.s2 }}
-          >
-            <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url} size="md" />
-            <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="h3" numberOfLines={1}>
-                {profile?.full_name || 'Your account'}
-              </AppText>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+          {/* Close, and the identity block.
+
+              The Verified badge used to sit on the same line as the headline,
+              which on a real profile reads "Plumbing Specialist · Kingston" —
+              the text took every available pixel and pushed the badge clean
+              off the panel edge. minWidth: 0 is the other half of the fix:
+              without it a flex child refuses to shrink below its content, so
+              numberOfLines never gets a chance to truncate and the row
+              overflows instead. */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s2 }}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Open your profile"
+              onPress={() => go('/(tabs)/profile')}
+              style={({ pressed }) => ({
+                flex: 1,
+                minWidth: 0,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s3,
+                padding: space.s2,
+                borderRadius: radius.md,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url} size="md" />
+              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2, minWidth: 0 }}
+                >
+                  <AppText variant="h3" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {profile?.full_name || 'Your account'}
+                  </AppText>
+                  {/* Compact: the icon carries the meaning and cannot be
+                      squeezed out by a long name. */}
+                  {profile?.identity_verified && <Badge kind="verified" compact />}
+                </View>
                 <AppText variant="caption" color="textMuted" numberOfLines={1}>
                   {isWorker ? worker?.headline || 'Pro' : 'Customer'}
                   {profile?.parish ? ` · ${profile.parish}` : ''}
                 </AppText>
-                {profile?.identity_verified && <Badge kind="verified" />}
               </View>
-            </View>
-          </Pressable>
+            </Pressable>
+
+            {/* Closing meant hitting the sliver of backdrop to the right of a
+                320pt panel. That is not a target. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close menu"
+              onPress={() => {
+                lightTap();
+                closeDrawer();
+              }}
+              hitSlop={10}
+              style={({ pressed }) => ({
+                width: 34,
+                height: 34,
+                borderRadius: radius.full,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: space.s2,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="close" size={18} color={colors.text} />
+            </Pressable>
+          </View>
 
           {/* Worker level progress — the mockup's "Level Up Your Business" card */}
           {isWorker && worker && (

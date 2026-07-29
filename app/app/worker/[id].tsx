@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Modal, Pressable, View } from 'react-native';
 
+import { PersonLink } from '@/components/PersonLink';
 import { PortfolioGrid } from '@/components/PortfolioGrid';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge, Chip } from '@/components/ui/badges';
@@ -475,11 +476,19 @@ export default function WorkerProfileScreen() {
                 <Card>
                   <View style={{ gap: space.s2 }}>
                     <View
-                      style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s2 }}
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s2, alignItems: 'center' }}
                     >
-                      <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>
-                        {review.reviewer?.full_name ?? 'Customer'}
-                      </AppText>
+                      {/* Who left this review is checkable — an anonymous
+                          five-star wall is exactly what fake reviews look
+                          like, so the author has to be a real person you can
+                          open. */}
+                      <View style={{ flex: 1 }}>
+                        <PersonLink
+                          id={review.reviewer_id}
+                          name={review.reviewer?.full_name ?? 'Customer'}
+                          variant="inline"
+                        />
+                      </View>
                       <AppText variant="caption" color="textMuted">
                         {timeAgo(review.created_at)}
                       </AppText>

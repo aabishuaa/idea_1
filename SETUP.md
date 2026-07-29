@@ -329,3 +329,54 @@ the `jobs` table, and RLS still decides who receives what.
   it's committed on purpose), then restart with `npx expo start --clear`.
 - **Project paused** — free Supabase pauses after inactivity; restore from the dashboard,
   then confirm the keep-warm workflow secrets are set (§1.5).
+
+## 6b. BizBot — what has to be true for it to answer
+
+BizBot answers in three tiers and falls through them automatically, so it is
+hard to have it fail outright:
+
+| Tier | Needs | What you get |
+| --- | --- | --- |
+| 1 | `bizbot` edge function deployed **and** an LLM key set | A written answer, in plain language, citing its sources |
+| 2 | The optional Python AI service running | Same, plus pgvector semantic retrieval |
+| 3 | Nothing but the database | The official passages, quoted verbatim, with citations |
+
+Tier 3 works because retrieval is a plain SQL function (`search_kb`, migration
+0015) over `kb_chunks` — no embeddings, no LLM, no deployed function. The app
+calls it directly. So the worst case is BizBot **quoting** the guidance rather
+than paraphrasing it, which is still grounded and still cited. Answers of that
+kind are labelled "Quoted from the official documents" in the chat so nothing
+is passed off as more than it is.
+
+### To get tier 1 (what you want for the pitch)
+
+```bash
+# 1. The knowledge base has to exist — migrations + seed (SETUP.md §4)
+supabase db push
+
+# 2. An LLM key. Gemini is the primary, Groq the failover; either alone works.
+supabase secrets set GEMINI_API_KEY=your-key-here
+supabase secrets set GROQ_API_KEY=your-key-here
+
+# 3. Deploy the functions
+supabase functions deploy bizbot extract-intent embed-text keepwarm
+```
+
+Check it landed:
+
+```bash
+supabase functions list          # bizbot should be ACTIVE
+supabase secrets list            # GEMINI_API_KEY / GROQ_API_KEY should appear
+```
+
+### If BizBot says something is wrong
+
+The chat now names the actual problem rather than "something went wrong".
+Reaching an error at all means even tier 3 failed, so it is the database or
+the session — not the LLM, and not the edge function. The common one is
+"the knowledge base isn't set up on this project yet", which means the seed
+has not been run.
+
+> Gemini free tier is ~1,500 requests/day and Groq has its own limit. On a 429
+> the function fails over automatically; if both are exhausted it drops to
+> tier 3 rather than erroring.
