@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { JobPhotos } from '@/components/JobPhotos';
+import { PersonLink } from '@/components/PersonLink';
 import { JobTracker } from '@/components/JobTracker';
 import { StatusPill } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
@@ -256,8 +257,17 @@ export default function JobDetailScreen() {
               </AppText>
             ) : null}
             <JobPhotos photos={photos} />
+            {/* Whoever is on the other side, openable — a name you cannot
+                tap is a dead end at the moment you want to check somebody. */}
+            <PersonLink
+              id={isCustomer ? job.worker_id : job.customer_id}
+              name={
+                (isCustomer ? job.worker?.full_name : job.customer?.full_name) ?? 'This person'
+              }
+              subtitle={isCustomer ? 'The pro on this job' : 'Booked this job'}
+            />
+
             <View style={{ gap: space.s2 }}>
-              <Row label="With" value={isCustomer ? job.worker?.full_name ?? '—' : job.customer?.full_name ?? '—'} />
               <Row label="Requested" value={formatDateTime(job.requested_at)} />
               {job.parish && <Row label="Where" value={job.parish} />}
               <Row label="Urgency" value={job.urgency} />

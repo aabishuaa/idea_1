@@ -1,8 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
+import { BrandLockup } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -64,11 +65,7 @@ export default function SignInScreen() {
         <Stagger interval={80} gap={space.s5}>
           {/* Brand mark */}
           <View style={{ alignItems: 'center', gap: space.s2 }}>
-            <Image
-              source={require('../../assets/splash-icon.png')}
-              style={{ width: 64, height: 64 }}
-              accessibilityLabel="myB logo"
-            />
+            <BrandLockup variant="h1" markSize={52} />
             <AppText variant="overline" color="textMuted">
               Connect. Build. Grow.
             </AppText>

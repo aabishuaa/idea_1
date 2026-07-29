@@ -4,8 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { JobPhotos } from '@/components/JobPhotos';
-import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/badges';
+import { PersonLink } from '@/components/PersonLink';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -206,25 +205,20 @@ export default function RequestReviewScreen() {
         <FadeSlideIn delay={60}>
           <Card raised>
             <View style={{ gap: space.s3 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-                <Avatar
-                  name={request.customer_name}
-                  uri={request.customer_avatar}
-                  size="lg"
-                />
-                <View style={{ flex: 1, gap: space.s1 }}>
-                  <AppText variant="h3" numberOfLines={1}>
-                    {request.customer_name}
-                  </AppText>
-                  {request.customer_verified ? (
-                    <Badge kind="verified" />
-                  ) : (
-                    <AppText variant="caption" color="textMuted">
-                      Identity not verified yet
-                    </AppText>
-                  )}
-                </View>
-              </View>
+              {/* Tappable: deciding whether to go to a stranger's house is
+                  exactly when you want to look them up. */}
+              <PersonLink
+                id={request.customer_id}
+                name={request.customer_name}
+                avatarUrl={request.customer_avatar}
+                verified={request.customer_verified}
+                size="lg"
+                subtitle={
+                  request.customer_verified
+                    ? 'Identity verified · tap to see their history'
+                    : 'Identity not verified yet · tap to see their history'
+                }
+              />
               <Pressable
                 accessibilityRole="button"
                 onPress={openChat}

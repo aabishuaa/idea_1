@@ -92,24 +92,39 @@ export function Wordmark({ variant = 'h1' }: { variant?: MarkVariant }) {
 }
 
 /**
- * The full lockup: rocket, then the wordmark. This is the logo — anywhere the
- * name appears, the rocket appears with it.
+ * The full lockup: the myB mark, then the wordmark.
+ *
+ * The mark is the shipped `home-logo.png` asset, not the drawn rocket. The
+ * rocket is the SPLASH — it is the motion that delivers the brand — but
+ * everywhere the name is simply present, the real logo belongs beside it.
+ * Pass `rocket` to use the drawn mark instead (the launch sequence does).
  */
 export function BrandLockup({
   variant = 'h2',
   markSize,
+  rocket = false,
 }: {
   variant?: MarkVariant;
   markSize?: number;
+  rocket?: boolean;
 }) {
   const fallback: Record<MarkVariant, number> = { display: 56, h1: 40, h2: 26, h3: 22 };
+  const size = markSize ?? fallback[variant];
   return (
     <View
       accessibilityRole="image"
       accessibilityLabel="myB"
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}
     >
-      <RocketMark size={markSize ?? fallback[variant]} />
+      {rocket ? (
+        <RocketMark size={size} />
+      ) : (
+        <Image
+          source={require('../../assets/home-logo.png')}
+          style={{ width: size, height: size, borderRadius: size * 0.24 }}
+          resizeMode="contain"
+        />
+      )}
       <Wordmark variant={variant} />
     </View>
   );
@@ -206,7 +221,7 @@ export function RocketLaunch() {
 
         {/*
           …and the real myB logo takes its place. Deliberately the shipped
-          asset (assets/splash-icon.png), not the drawn rocket: the rocket is
+          asset (assets/home-logo.png), not the drawn rocket: the rocket is
           the motion, the logo is the brand. It scales up from roughly the
           rocket's size as the rocket shrinks away, so the two read as one
           shape becoming another rather than a swap.
@@ -228,8 +243,9 @@ export function RocketLaunch() {
           }}
         >
           <Image
-            source={require('../../assets/splash-icon.png')}
+            source={require('../../assets/home-logo.png')}
             style={{ width: 96, height: 96 }}
+            resizeMode="contain"
             accessibilityLabel="myB logo"
           />
         </Animated.View>

@@ -180,10 +180,40 @@ export default function ThreadScreen() {
     };
   }, [id, load]);
 
-  // Put the counterparty's name in the header instead of a generic "Chat".
+  /*
+    The header shows who you are talking to, and opens them.
+
+    A chat is exactly where "who IS this person" comes up — you are arranging
+    for a stranger to come to your house, or going to theirs — so the name at
+    the top is a button, not a label.
+  */
   useEffect(() => {
-    if (other?.full_name) navigation.setOptions({ title: other.full_name });
-  }, [navigation, other?.full_name]);
+    if (!other) return;
+    navigation.setOptions({
+      headerTitle: () => (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`${other.full_name}. Open profile.`}
+          onPress={() => {
+            lightTap();
+            router.push({ pathname: '/person/[id]', params: { id: other.id } });
+          }}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.s2,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Avatar name={other.full_name} uri={other.avatar_url} size="sm" />
+          <AppText variant="label" numberOfLines={1}>
+            {other.full_name}
+          </AppText>
+        </Pressable>
+      ),
+    });
+  }, [navigation, other]);
 
   const send = async () => {
     const body = draft.trim();
