@@ -72,6 +72,7 @@ function RootStack() {
         <Stack.Screen name="formalize/checklist" options={{ title: 'Your checklist' }} />
         <Stack.Screen name="formalize/step/[id]" options={{ title: 'Step' }} />
         <Stack.Screen name="formalize/bizbot" options={{ title: 'BizBot' }} />
+        <Stack.Screen name="formalize/chats" options={{ title: 'Saved chats' }} />
       </Stack>
     </>
   );
