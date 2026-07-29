@@ -48,7 +48,7 @@ export default function RequestReviewScreen() {
   const [busy, setBusy] = useState<null | 'accept' | 'decline' | 'message'>(null);
   const [note, setNote] = useState('');
   const [noteSent, setNoteSent] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  const [outcome, setOutcome] = useState<null | 'accepted' | 'declined'>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -105,11 +105,9 @@ export default function RequestReviewScreen() {
       setError(updateError.message);
       return;
     }
-    if (status === 'accepted') {
-      setAccepted(true);
-    } else {
-      router.replace('/(tabs)/bookings');
-    }
+    // Both answers get the full-screen moment — declining is a real decision
+    // and the worker should see it land, just in red rather than blue.
+    setOutcome(status === 'accepted' ? 'accepted' : 'declined');
   };
 
   /** Ask a question without committing — the thread stays after either answer. */
@@ -155,7 +153,7 @@ export default function RequestReviewScreen() {
 
   return (
     <Screen>
-      {accepted && (
+      {outcome === 'accepted' && (
         <SuccessOverlay
           visible
           icon="briefcase"
@@ -165,9 +163,21 @@ export default function RequestReviewScreen() {
           onAction={() => router.replace({ pathname: '/job/[id]', params: { id: request.id } })}
           secondaryTitle="Message the customer"
           onSecondary={() => {
-            setAccepted(false);
+            setOutcome(null);
             void openChat();
           }}
+        />
+      )}
+
+      {outcome === 'declined' && (
+        <SuccessOverlay
+          visible
+          tone="danger"
+          icon="close"
+          title="Request declined"
+          message={`${request.customer_name} has been told, so they can find someone else. Declining does not affect your rating — leaving people waiting does.`}
+          actionTitle="Back to bookings"
+          onAction={() => router.replace('/(tabs)/bookings')}
         />
       )}
 

@@ -254,8 +254,12 @@ export default function WorkerProfileScreen() {
       </View>
 
       <View style={{ paddingHorizontal: space.s4, gap: space.s5, paddingBottom: space.s12 }}>
-        {/* ── Identity, overlapping the cover ─────────────────────────── */}
-        <View style={{ marginTop: -44, gap: space.s3 }}>
+        {/* ── Identity, overlapping the cover ───────────────────────────
+            zIndex + elevation are required, not decorative: a negative margin
+            pulls this UP into the cover's box, and without an explicit stacking
+            order the gradient (an earlier sibling with its own layer) painted
+            over the avatar — you could see the ring but not the face. */}
+        <View style={{ marginTop: -44, gap: space.s3, zIndex: 2, elevation: 2 }}>
           <Pressable
             accessibilityRole={isSelf ? 'button' : 'image'}
             accessibilityLabel={isSelf ? 'Change your photo' : `${profile.full_name}'s photo`}
@@ -268,6 +272,8 @@ export default function WorkerProfileScreen() {
                 borderRadius: radius.full,
                 borderWidth: 4,
                 borderColor: colors.bg,
+                backgroundColor: colors.bg,
+                overflow: 'hidden',
               }}
             >
               <Avatar name={profile.full_name} uri={profile.avatar_url} size="xl" />

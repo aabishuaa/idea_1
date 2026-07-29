@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated, Easing, Image, View } from 'react-native';
 
 import { AppText } from './ui/Text';
 import { useTheme } from '@/theme/ThemeContext';
@@ -17,12 +17,17 @@ const DOT_SIZE: Record<MarkVariant, number> = {
   h3: 6,
 };
 
-/** Baseline nudge so the dot sits where a full stop would. */
-const DOT_DROP: Record<MarkVariant, number> = {
-  display: 4,
-  h1: 3,
-  h2: 2,
-  h3: 2,
+/**
+ * How far ABOVE the baseline the dot sits. A true full stop rests on the
+ * baseline, which put the dot visually below the "B" and made the lockup look
+ * like it was sagging; lifting it aligns the dot with the letter's optical
+ * bottom instead.
+ */
+const DOT_LIFT: Record<MarkVariant, number> = {
+  display: 9,
+  h1: 7,
+  h2: 6,
+  h3: 5,
 };
 
 /**
@@ -78,8 +83,8 @@ export function Wordmark({ variant = 'h1' }: { variant?: MarkVariant }) {
           height: size,
           borderRadius: size / 2,
           backgroundColor: colors.accent,
-          marginLeft: 2,
-          marginBottom: DOT_DROP[variant],
+          marginLeft: 3,
+          marginBottom: DOT_LIFT[variant],
         }}
       />
     </View>
@@ -199,21 +204,48 @@ export function RocketLaunch() {
           </Animated.View>
         </Animated.View>
 
-        {/* …revealing the logo underneath it. */}
+        {/*
+          …and the real myB logo takes its place. Deliberately the shipped
+          asset (assets/splash-icon.png), not the drawn rocket: the rocket is
+          the motion, the logo is the brand. It scales up from roughly the
+          rocket's size as the rocket shrinks away, so the two read as one
+          shape becoming another rather than a swap.
+        */}
         <Animated.View
           style={{
             position: 'absolute',
+            alignItems: 'center',
             opacity: logo,
             transform: [
-              { scale: logo.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }) },
+              { scale: logo.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) },
+              {
+                rotate: logo.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['-12deg', '0deg'],
+                }),
+              },
             ],
           }}
         >
-          <BrandLockup variant="display" markSize={62} />
+          <Image
+            source={require('../../assets/splash-icon.png')}
+            style={{ width: 96, height: 96 }}
+            accessibilityLabel="myB logo"
+          />
         </Animated.View>
       </View>
 
-      <Animated.View style={{ opacity: logo, alignItems: 'center' }}>
+      <Animated.View
+        style={{
+          opacity: logo,
+          alignItems: 'center',
+          gap: space.s2,
+          transform: [
+            { translateY: logo.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+          ],
+        }}
+      >
+        <Wordmark variant="display" />
         <AppText variant="body" color="textMuted">
           Mind yuh business.
         </AppText>

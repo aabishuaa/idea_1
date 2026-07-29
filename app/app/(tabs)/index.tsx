@@ -141,9 +141,15 @@ export default function HomeScreen() {
                 <AppText variant="caption" color="textMuted">
                   {greeting()}
                 </AppText>
-                <AppText variant="h2" numberOfLines={1}>
-                  {firstName}
-                </AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+                  <AppText variant="h2" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {firstName}
+                  </AppText>
+                  {/* The wave is back, as an icon rather than an emoji: emoji
+                      render at the system font's whim and never match the
+                      type or the theme. */}
+                  <WavingHand />
+                </View>
               </View>
               <View
                 style={{
@@ -511,6 +517,38 @@ export default function HomeScreen() {
         </Stagger>
       </View>
     </Screen>
+  );
+}
+
+/** A hand that actually waves. Rotation only, so it stays on the native driver. */
+function WavingHand() {
+  const { colors } = useTheme();
+  const wave = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wave, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(wave, { toValue: -1, duration: 180, useNativeDriver: true }),
+        Animated.timing(wave, { toValue: 0, duration: 180, useNativeDriver: true }),
+        // A long pause, so it greets you rather than fidgeting forever.
+        Animated.delay(2600),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [wave]);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [
+          { rotate: wave.interpolate({ inputRange: [-1, 1], outputRange: ['-18deg', '18deg'] }) },
+        ],
+      }}
+    >
+      <Ionicons name="hand-left" size={20} color={colors.star} />
+    </Animated.View>
   );
 }
 

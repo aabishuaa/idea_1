@@ -39,7 +39,7 @@ export default function JobDetailScreen() {
   // the screen spun forever whenever the row could not be read.
   const [phase, setPhase] = useState<'loading' | 'ready' | 'missing'>('loading');
   const [celebration, setCelebration] = useState<
-    null | 'booked' | 'reviewed' | 'completed' | 'accepted'
+    null | 'booked' | 'reviewed' | 'completed' | 'accepted' | 'declined' | 'cancelled'
   >(confirmed === '1' ? 'booked' : null);
   // Remembered so a status arriving over Realtime can be recognised as a
   // TRANSITION (requested → accepted) rather than just a value.
@@ -159,6 +159,8 @@ export default function JobDetailScreen() {
     if (error) return;
     if (status === 'completed') setCelebration('completed');
     if (status === 'accepted') setCelebration('accepted');
+    if (status === 'declined') setCelebration('declined');
+    if (status === 'cancelled') setCelebration('cancelled');
     void load();
   };
 
@@ -194,6 +196,16 @@ export default function JobDetailScreen() {
       message: 'Your rating helps the next customer choose with confidence.',
       icon: 'star' as const,
     },
+    declined: {
+      title: 'Request declined',
+      message: 'The customer has been told, so they can find someone else.',
+      icon: 'close' as const,
+    },
+    cancelled: {
+      title: 'Booking cancelled',
+      message: 'Everyone has been notified. Nothing further is owed on this job.',
+      icon: 'close' as const,
+    },
     accepted: isWorker
       ? {
           title: 'Job accepted!',
@@ -212,6 +224,10 @@ export default function JobDetailScreen() {
       {celebration && (
         <SuccessOverlay
           visible
+          // Red for the endings, blue for the beginnings.
+          tone={
+            celebration === 'declined' || celebration === 'cancelled' ? 'danger' : 'success'
+          }
           icon={celebrationCopy[celebration].icon}
           title={celebrationCopy[celebration].title}
           message={celebrationCopy[celebration].message}

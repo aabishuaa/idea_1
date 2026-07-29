@@ -17,6 +17,7 @@ import { logEvent } from '@/lib/events';
 import { pickImage, uploadTo, type PickedImage } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { useJobDraft } from '@/providers/JobDraftProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { JobUrgency } from '@/types/db';
@@ -34,25 +35,37 @@ const URGENCIES: { value: JobUrgency; label: string }[] = [
  * Job request (FR-JOB-1, FR-DISC-1/2): describe in plain language; the LLM
  * extracts structured intent to prefill; the customer confirms and sends.
  * If no worker was picked yet, we route to search with the description.
+ *
+ * The form is written ONCE. Everything typed here is kept in the job draft, so
+ * coming back with a pro chosen shows a confirmation of what was already said
+ * — not the same empty form again.
  */
 export default function NewJobScreen() {
   const params = useLocalSearchParams<{ workerId?: string }>();
   const { session } = useAuth();
   const { colors } = useTheme();
+  const { draft, hasDraft, setDraft, clearDraft } = useJobDraft();
   const [workerName, setWorkerName] = useState<string | null>(null);
-  const [description, setDescription] = useState('');
-  const [title, setTitle] = useState('');
-  const [urgency, setUrgency] = useState<JobUrgency>('normal');
-  const [budget, setBudget] = useState('');
-  const [tradeSlug, setTradeSlug] = useState<string | null>(null);
-  const [parish, setParish] = useState<string | null>(null);
+  const [description, setDescription] = useState(draft.description);
+  const [title, setTitle] = useState(draft.title);
+  const [urgency, setUrgency] = useState<JobUrgency>(draft.urgency);
+  const [budget, setBudget] = useState(draft.budget);
+  const [tradeSlug, setTradeSlug] = useState<string | null>(draft.tradeSlug);
+  const [parish, setParish] = useState<string | null>(draft.parish);
+  /*
+    Arriving with a pro already chosen AND a draft in hand means the customer
+    has answered all of this on the previous screen. Show it back to them for
+    a yes/no instead of making them type it twice — the review can be opened
+    if they want to change something.
+  */
+  const [reviewing, setReviewing] = useState(Boolean(params.workerId) && hasDraft);
   // The title is generated unless the customer edits it. Tracking that lets
   // the generator keep improving as they type without overwriting their words.
-  const [titleEdited, setTitleEdited] = useState(false);
+  const [titleEdited, setTitleEdited] = useState(draft.understood);
   const [tradeLabels, setTradeLabels] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [understanding, setUnderstanding] = useState(false);
-  const [photos, setPhotos] = useState<PickedImage[]>([]);
+  const [photos, setPhotos] = useState<PickedImage[]>(draft.photos);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +108,23 @@ export default function NewJobScreen() {
       parish: where ?? null,
     });
 
+  // Mirror every field into the draft so leaving this screen never loses it.
+  useEffect(() => {
+    setDraft({
+      description,
+      title,
+      urgency,
+      budget,
+      tradeSlug,
+      parish,
+      photos,
+      understood: titleEdited || title.length > 0,
+    });
+    // setDraft is stable; the draft itself must not be a dependency or this
+    // would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, title, urgency, budget, tradeSlug, parish, photos, titleEdited]);
+
   const understand = async () => {
     if (description.trim().length < 6) return;
     setUnderstanding(true);
@@ -117,6 +147,8 @@ export default function NewJobScreen() {
     }
   };
 
+  const budgetValue = budget ? Number(budget.replace(/[^0-9.]/g, '')) : null;
+
   const submit = async () => {
     if (!session) return;
     setError(null);
@@ -128,7 +160,6 @@ export default function NewJobScreen() {
     }
 
     setBusy(true);
-    const budgetValue = budget ? Number(budget.replace(/[^0-9.]/g, '')) : null;
     const { data, error: insertError } = await supabase
       .from('jobs')
       .insert({
@@ -169,11 +200,118 @@ export default function NewJobScreen() {
     }
 
     logEvent('job_request_created', { trade_slug: tradeSlug, parish, payload: { urgency } });
+    // The request is sent; the draft has done its job.
+    clearDraft();
     // Must be the ROUTE PATTERN, not the resolved path: passing
     // `/job/<uuid>` with a params object does not match any route, so the
     // navigation silently no-ops and the request looks like it never sent.
     router.replace({ pathname: '/job/[id]', params: { id: data.id, confirmed: '1' } });
   };
+
+  /*
+    The confirm screen. Everything below was already answered on the previous
+    step, so this is a read-back with one button — the point is that choosing a
+    pro should COMPLETE the request, not restart it.
+  */
+  if (reviewing) {
+    return (
+      <Screen>
+        <View style={{ gap: space.s5 }}>
+          <View style={{ gap: space.s2 }}>
+            <AppText variant="h2">Send this to {workerName ?? 'this pro'}?</AppText>
+            <AppText variant="bodySm" color="textMuted">
+              We kept everything you already told us. Nothing to type again.
+            </AppText>
+          </View>
+
+          {workerName && (
+            <Card raised>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+                <Avatar name={workerName} size="md" />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="label">{workerName}</AppText>
+                  <AppText variant="caption" color="textMuted">
+                    Will get this request on their phone right away
+                  </AppText>
+                </View>
+              </View>
+            </Card>
+          )}
+
+          <Card>
+            <View style={{ gap: space.s3 }}>
+              <AppText variant="h3">{title || 'Your job'}</AppText>
+              <AppText variant="bodySm" color="textMuted">
+                {description}
+              </AppText>
+
+              {photos.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: space.s2, flexWrap: 'wrap' }}>
+                  {photos.map((photo) => (
+                    <Image
+                      key={photo.uri}
+                      source={{ uri: photo.uri }}
+                      style={{ width: 64, height: 64, borderRadius: radius.md }}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
+              )}
+
+              <View style={{ gap: space.s2, paddingTop: space.s1 }}>
+                <SummaryRow
+                  icon="alarm-outline"
+                  label="How soon"
+                  value={URGENCIES.find((option) => option.value === urgency)?.label ?? 'This week'}
+                />
+                {parish && (
+                  <SummaryRow icon="location-outline" label="Where" value={parish} />
+                )}
+                {budgetValue != null && (
+                  <SummaryRow
+                    icon="cash-outline"
+                    label="Budget"
+                    value={`JMD ${budgetValue.toLocaleString('en-JM')}`}
+                  />
+                )}
+                {photos.length > 0 && (
+                  <SummaryRow
+                    icon="camera-outline"
+                    label="Photos"
+                    value={`${photos.length} attached`}
+                  />
+                )}
+              </View>
+            </View>
+          </Card>
+
+          {error && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+              <Ionicons name="alert-circle" size={16} color={colors.error} />
+              <AppText variant="bodySm" color="error" style={{ flex: 1 }}>
+                {error}
+              </AppText>
+            </View>
+          )}
+
+          <Button
+            title="Send request"
+            icon="send"
+            fullWidth
+            loading={busy}
+            onPress={submit}
+          />
+          <Button
+            title="Change something"
+            variant="secondary"
+            icon="create-outline"
+            fullWidth
+            onPress={() => setReviewing(false)}
+          />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -322,5 +460,28 @@ export default function NewJobScreen() {
         />
       </View>
     </Screen>
+  );
+}
+
+function SummaryRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+      <Ionicons name={icon} size={15} color={colors.textMuted} />
+      <AppText variant="bodySm" color="textMuted" style={{ width: 84 }}>
+        {label}
+      </AppText>
+      <AppText variant="bodySm" style={{ flex: 1 }}>
+        {value}
+      </AppText>
+    </View>
   );
 }

@@ -5,7 +5,7 @@ import { Animated, Easing, Modal, View, useWindowDimensions } from 'react-native
 
 import { Button } from './Button';
 import { AppText } from './Text';
-import { successTap } from './animated';
+import { successTap, warnTap } from './animated';
 import { playChime } from '@/lib/sound';
 import { useTheme } from '@/theme/ThemeContext';
 import { space } from '@/theme/tokens';
@@ -25,6 +25,13 @@ interface SuccessOverlayProps {
   icon?: keyof typeof Ionicons.glyphMap;
   /** Play the signature chime. On for the big moments, off for small ones. */
   sound?: boolean;
+  /**
+   * The colour of the moment. 'success' is the brand blue wash; 'danger' is
+   * red, for outcomes that are final but not good — declining a request,
+   * cancelling a booking. A decision that closes something down deserves the
+   * same weight as one that opens something up, just not the same colour.
+   */
+  tone?: 'success' | 'danger';
 }
 
 /**
@@ -48,8 +55,11 @@ export function SuccessOverlay({
   onDismiss,
   icon = 'checkmark',
   sound = true,
+  tone = 'success',
 }: SuccessOverlayProps) {
   const { colors } = useTheme();
+  const wash1 = tone === 'danger' ? '#B4262A' : colors.primary;
+  const wash2 = tone === 'danger' ? colors.error : colors.accent;
   const { width, height } = useWindowDimensions();
 
   // One driver per stage so they can overlap slightly.
@@ -70,8 +80,10 @@ export function SuccessOverlay({
       return;
     }
 
-    successTap();
-    if (sound) playChime();
+    if (tone === 'danger') warnTap();
+    else successTap();
+    // The chime is the "something good landed" sound; a decline is not that.
+    if (sound && tone === 'success') playChime();
     Animated.sequence([
       // 1. Blue floods out from the centre.
       Animated.timing(wash, {
@@ -109,7 +121,7 @@ export function SuccessOverlay({
       const timer = setTimeout(onDismiss, autoDismissMs);
       return () => clearTimeout(timer);
     }
-  }, [visible, sound, wash, tick, ring, copy, autoDismissMs, onDismiss]);
+  }, [visible, sound, tone, wash, tick, ring, copy, autoDismissMs, onDismiss]);
 
   if (!visible) return null;
 
@@ -130,7 +142,7 @@ export function SuccessOverlay({
           }}
         >
           <LinearGradient
-            colors={[colors.primary, colors.accent]}
+            colors={[wash1, wash2]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{ flex: 1, borderRadius: radius }}
@@ -212,7 +224,7 @@ export function SuccessOverlay({
                   fullWidth
                   onPress={onAction}
                   style={{ backgroundColor: '#FFFFFF' }}
-                  textColor={colors.primary}
+                  textColor={wash1}
                 />
               )}
               {secondaryTitle && onSecondary && (

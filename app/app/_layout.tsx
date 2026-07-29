@@ -13,11 +13,12 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppDrawer } from '@/components/AppDrawer';
-import { HeaderBack } from '@/components/HeaderBack';
+import { HeaderBack, HeaderHome } from '@/components/HeaderBack';
 import { IncomingRequestBanner } from '@/components/IncomingRequestBanner';
 import { warmChime } from '@/lib/sound';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { DrawerProvider } from '@/providers/DrawerProvider';
+import { JobDraftProvider } from '@/providers/JobDraftProvider';
 import { RequestsProvider } from '@/providers/RequestsProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 
@@ -38,6 +39,7 @@ function RootStack() {
           // Every stack screen gets a back arrow, including the ones you
           // arrive at via router.replace where the native one disappears.
           headerLeft: () => <HeaderBack />,
+          headerRight: () => <HeaderHome />,
           headerBackVisible: false,
         }}
       >
@@ -98,6 +100,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <RequestsProvider>
+            <JobDraftProvider>
             <DrawerProvider>
               <RootStack />
               {/* Global sidebar — reachable from every screen's ☰ button. */}
@@ -105,6 +108,7 @@ export default function RootLayout() {
               {/* Drops in wherever the worker is when a request arrives. */}
               <IncomingRequestBanner />
             </DrawerProvider>
+            </JobDraftProvider>
           </RequestsProvider>
         </AuthProvider>
       </ThemeProvider>
