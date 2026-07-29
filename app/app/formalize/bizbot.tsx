@@ -14,6 +14,8 @@ import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 
 interface BotMessage {
+  /** Answer came from quoted source passages, not a written reply. */
+  quoted?: boolean;
   id: string;
   role: 'user' | 'assistant';
   content: string;
@@ -74,16 +76,21 @@ export default function BizBotScreen() {
           role: 'assistant',
           content: answer.answer,
           sources: answer.grounded ? answer.sources : [],
+          // 'sources' means the answer is quoted straight from the knowledge
+          // base because no LLM was reachable. Say so rather than passing
+          // quoted text off as a written reply.
+          quoted: answer.provider === 'sources',
         },
       ]);
-    } catch {
+    } catch (error) {
+      // Name the actual problem. "Something went wrong" is useless when the
+      // fix is one CLI command.
       setMessages((current) => [
         ...current.filter((message) => !message.pending),
         {
           id: `e-${Date.now()}`,
           role: 'assistant',
-          content:
-            "Mi can't reach the knowledge base right now — the service may be waking up (free tier takes a minute). Try again shortly.",
+          content: diagnose(error),
         },
       ]);
     } finally {
@@ -125,6 +132,29 @@ export default function BizBotScreen() {
                   </AppText>
                 )}
               </View>
+              {/* Honest about which tier answered. Quoted passages are still
+                  a real answer — they are the official wording — but they are
+                  not a written reply and should not pretend to be. */}
+              {item.quoted && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.s1,
+                    alignSelf: 'flex-start',
+                    paddingHorizontal: space.s2,
+                    paddingVertical: 2,
+                    borderRadius: radius.full,
+                    backgroundColor: colors.warningSoft,
+                  }}
+                >
+                  <Ionicons name="document-text-outline" size={11} color={colors.warning} />
+                  <AppText variant="caption" style={{ color: colors.warning }}>
+                    Quoted from the official documents
+                  </AppText>
+                </View>
+              )}
+
               {item.sources && item.sources.length > 0 && (
                 <View style={{ gap: space.s1, paddingLeft: space.s2 }}>
                   <AppText variant="caption" color="textMuted">
@@ -226,4 +256,26 @@ export default function BizBotScreen() {
       </View>
     </Screen>
   );
+}
+
+/**
+ * Turn a failure into something actionable.
+ *
+ * Reaching here means even reading the knowledge base directly failed, so the
+ * problem is the database or the session — not the LLM, and not the edge
+ * function, both of which BizBot now survives without.
+ */
+function diagnose(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/not signed in|JWT|401/i.test(message)) {
+    return "Mi can't check who you are right now. Sign out and back in, then ask me again.";
+  }
+  if (/knowledge base unavailable/i.test(message)) {
+    return "The knowledge base isn't set up on this project yet. Apply the migrations and the seed (supabase db push, then run seed.sql) and mi will have the official documents to answer from.";
+  }
+  if (/Network|fetch|unreachable|timeout/i.test(message)) {
+    return "Mi can't reach the network right now. Check your connection and try again.";
+  }
+  return `Mi hit a problem answering that one: ${message}`;
 }

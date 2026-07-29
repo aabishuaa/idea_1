@@ -98,35 +98,62 @@ export interface ChatTurn {
 }
 
 /**
- * BizBot.
+ * BizBot, in three tiers — because a demo cannot depend on a deployment.
  *
- * The Supabase edge function is the primary path: it retrieves from the KB
- * with Postgres full-text search and generates through Gemini/Groq, so it
- * needs nothing running locally. The Python AI service is tried only as a
- * fallback (it adds pgvector semantic retrieval when it is deployed), which
- * is why BizBot no longer dies when that service is down.
+ *   1. Supabase edge function `bizbot` — retrieves with Postgres full-text
+ *      search and writes the answer with Gemini/Groq. The real experience.
+ *   2. The Python AI service, if one is configured. It adds pgvector semantic
+ *      retrieval, and is optional by design.
+ *   3. The app calls `search_kb` ITSELF and quotes the official passages.
+ *
+ * Tier 3 is the point. Retrieval is a plain SQL function over kb_chunks: no
+ * embeddings, no LLM key, no deployed function. So BizBot's worst case is
+ * "it quotes the source instead of paraphrasing it" rather than an error —
+ * and since BizBot must never invent a tax rule, quoting is if anything the
+ * more trustworthy answer.
+ *
+ * An error is thrown only if all three fail, and it carries the FIRST failure
+ * so the screen can say what to fix rather than "something went wrong".
  */
 export async function askBizBot(
   question: string,
   history: ChatTurn[],
   parish?: string | null,
 ): Promise<RagAnswer> {
+  let firstFailure: unknown = null;
+
   try {
     const { askBizBotEdge } = await import('./edge');
     return await askBizBotEdge(question, history, parish);
   } catch (edgeError) {
-    if (!env.aiServiceUrl) throw edgeError;
-    const headers = await authHeaders();
-    return request<RagAnswer>('/rag/query', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question,
-        country: 'JM',
-        parish: parish ?? null,
-        history: history.slice(-6),
-      }),
-    });
+    firstFailure = edgeError;
+  }
+
+  if (env.aiServiceUrl) {
+    try {
+      const headers = await authHeaders();
+      return await request<RagAnswer>('/rag/query', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          country: 'JM',
+          parish: parish ?? null,
+          history: history.slice(-6),
+        }),
+      });
+    } catch {
+      // Optional by design — fall through to reading the KB directly.
+    }
+  }
+
+  const { answerFromKnowledgeBase } = await import('./bizbotFallback');
+  try {
+    return await answerFromKnowledgeBase(question);
+  } catch (kbError) {
+    // Everything is down, including the database. Report the first failure,
+    // which is the one that actually needs fixing.
+    throw firstFailure ?? kbError;
   }
 }
 
