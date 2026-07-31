@@ -6,8 +6,15 @@ export interface BusinessStats {
   jobs_booked_this_month: number;
   jobs_worked_this_month: number;
   jobs_completed_all_time: number;
+  /** Both sides recorded the same figure. The only number safe to call income. */
   earned_this_month_jmd: number;
   earned_all_time_jmd: number;
+  /** Completed work whose amount is unagreed or unstated. Never summed above. */
+  unconfirmed_this_month_jmd: number;
+  unconfirmed_all_time_jmd: number;
+  jobs_awaiting_my_confirmation: number;
+  jobs_awaiting_them: number;
+  payment_mismatches: number;
   spent_this_month_jmd: number;
   rating_avg: number;
   rating_count: number;
@@ -75,8 +82,44 @@ export function answerFromStats(question: string, stats: BusinessStats): RagAnsw
     lines.push(
       `You've earned ${formatJmd(stats.earned_this_month_jmd)} this month, and ${formatJmd(
         stats.earned_all_time_jmd,
-      )} on myB all together.`,
+      )} on myB all together — confirmed by both you and the customer.`,
     );
+    /*
+      Unconfirmed money is reported SEPARATELY and never folded into the figure
+      above. Quoting one total would tell a worker they have earned money that
+      nobody has corroborated — exactly the number that must not appear on a
+      record a lender is asked to read.
+    */
+    if (Number(stats.unconfirmed_all_time_jmd) > 0) {
+      lines.push(
+        `A further ${formatJmd(stats.unconfirmed_all_time_jmd)} is on completed jobs where the amount hasn't been agreed by both sides, so it isn't counted as confirmed income yet.`,
+      );
+    }
+  }
+
+  if (asks('confirm', 'waiting', 'pending', 'agree', 'mismatch', 'dispute')) {
+    if (stats.jobs_awaiting_my_confirmation > 0) {
+      lines.push(
+        `${stats.jobs_awaiting_my_confirmation} job${stats.jobs_awaiting_my_confirmation === 1 ? ' is' : 's are'} waiting on YOUR confirmation.`,
+      );
+    }
+    if (stats.jobs_awaiting_them > 0) {
+      lines.push(
+        `${stats.jobs_awaiting_them} job${stats.jobs_awaiting_them === 1 ? ' is' : 's are'} waiting on the other side to confirm.`,
+      );
+    }
+    if (stats.payment_mismatches > 0) {
+      lines.push(
+        `${stats.payment_mismatches} job${stats.payment_mismatches === 1 ? ' has' : 's have'} an amount that doesn't match what the other side recorded.`,
+      );
+    }
+    if (
+      stats.jobs_awaiting_my_confirmation === 0 &&
+      stats.jobs_awaiting_them === 0 &&
+      stats.payment_mismatches === 0
+    ) {
+      lines.push('Nothing is waiting to be confirmed — every finished job is agreed by both sides.');
+    }
   }
 
   if (asks('job', 'work', 'complete', 'finished')) {

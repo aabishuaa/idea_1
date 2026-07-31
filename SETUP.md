@@ -288,6 +288,40 @@ the `jobs` table, and RLS still decides who receives what.
 
 ---
 
+## 6e. Two-sided completion — what changed for the demo
+
+A job is no longer finished when one person says so. Both the customer and the
+worker must confirm, and the amount paid only counts when both record the **same
+figure**. Payments themselves remain out of scope — myB moves no money, it
+records what both parties say was paid.
+
+This matters for how you demo it:
+
+- **"Mark completed" is gone.** Both sides now see a confirmation panel on the
+  booking screen. The job stays in progress, visibly "waiting on the other
+  side", until the second person confirms.
+- **It needs two devices** (or two accounts) to complete a job end to end. That
+  is the point, and it makes a better demo — confirm on one phone, watch the
+  other get the nudge notification, confirm there, and the celebration fires.
+- **Amounts that disagree** leave the work completed but the payment
+  unconfirmed, and the money is excluded from earnings until they match. Worth
+  showing deliberately: type 12000 on one phone and 9000 on the other.
+
+Two numbers on the earnings screen now mean different things:
+
+| Figure | Meaning |
+| --- | --- |
+| **Confirmed** | Both sides recorded the same amount. The only figure presented as income, and the only one on the reputation PDF. |
+| **Unconfirmed** | Completed work whose amount is unagreed or unstated. Shown so nothing looks lost, never summed into earnings. |
+
+If demo earnings look lower than before: they are, and they are now honest. The
+old figure fell back to the customer's *budget ceiling* when no price had been
+agreed, so a hoped-for number was being reported as money earned. Migration 0024
+removes that fallback. Seeded history is backfilled as confirmed, so only jobs
+completed during the demo start out unconfirmed.
+
+---
+
 ## 6d. Verifying a migration before it touches the live project
 
 The free tier gives one database and no staging, and CI has no Docker, so
@@ -309,6 +343,7 @@ done
 
 # Behavioural assertions.
 psql -h /tmp/mybtest -p 54999 -d postgres -v ON_ERROR_STOP=1 -f supabase/test/verify_0023.sql
+psql -h /tmp/mybtest -p 54999 -d postgres -f supabase/test/verify_0024.sql
 ```
 
 `harness.sql` emulates the **platform**, not the product — `auth.uid()` reads a

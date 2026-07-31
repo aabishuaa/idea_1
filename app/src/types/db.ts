@@ -89,6 +89,18 @@ export interface Job {
   needed_by: string | null;
   budget_min_jmd: number | null;
   budget_max_jmd: number | null;
+  /*
+    Two signatures, on two independent facts (migration 0024).
+
+    The job only reaches 'completed' when both *_completed_at are set, and
+    agreed_price_jmd is only non-null when both *_amount_jmd hold the SAME
+    figure — a price one side asserted is never presented as agreed.
+  */
+  customer_completed_at: string | null;
+  worker_completed_at: string | null;
+  customer_amount_jmd: number | null;
+  worker_amount_jmd: number | null;
+  payment_agreed_at: string | null;
   agreed_price_jmd: number | null;
   status: JobStatus;
   requested_at: string;

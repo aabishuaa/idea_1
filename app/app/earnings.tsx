@@ -18,6 +18,9 @@ interface CompletedJob {
   id: string;
   title: string;
   agreed_price_jmd: number | null;
+  /** Non-null only when both sides recorded the same figure (migration 0024). */
+  payment_agreed_at: string | null;
+  worker_amount_jmd: number | null;
   completed_at: string;
 }
 
@@ -35,7 +38,7 @@ export default function EarningsScreen() {
     const [jobsRes, demandRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('id, title, agreed_price_jmd, completed_at')
+        .select('id, title, agreed_price_jmd, payment_agreed_at, worker_amount_jmd, completed_at')
         .eq('worker_id', session.user.id)
         .eq('status', 'completed')
         .gte('completed_at', since.toISOString())
@@ -70,8 +73,20 @@ export default function EarningsScreen() {
         const completed = new Date(job.completed_at);
         return completed >= month && completed < next;
       })
+      /*
+        Confirmed money only. agreed_price_jmd is null unless both sides named
+        the same figure, so this cannot silently include a number one person
+        asserted — which is the whole point of the earnings screen being
+        something a worker can show someone.
+      */
       .reduce((sum, job) => sum + Number(job.agreed_price_jmd ?? 0), 0);
   };
+
+  /** Completed work whose amount nobody has corroborated. Shown apart, never added in. */
+  const unconfirmedTotal = (jobs ?? [])
+    .filter((job) => job.payment_agreed_at == null)
+    .reduce((sum, job) => sum + Number(job.worker_amount_jmd ?? 0), 0);
+  const unconfirmedCount = (jobs ?? []).filter((job) => job.payment_agreed_at == null).length;
 
   const thisMonth = monthTotal(0);
   const lastMonth = monthTotal(1);
@@ -94,7 +109,7 @@ export default function EarningsScreen() {
         <Card raised level={2}>
           <View style={{ gap: space.s2 }}>
             <AppText variant="caption" color="textMuted">
-              This month
+              This month · confirmed by both sides
             </AppText>
             <AppText variant="display">{formatJmd(thisMonth)}</AppText>
             {delta != null && (
@@ -107,6 +122,27 @@ export default function EarningsScreen() {
                 <AppText variant="caption" color={delta >= 0 ? 'success' : 'error'}>
                   {delta >= 0 ? '+' : ''}
                   {delta}% vs last month
+                </AppText>
+              </View>
+            )}
+            {/* Unconfirmed money is shown, never added in. A worker needs to
+                know it is there — it is usually just someone who has not
+                tapped confirm — but a total nobody has corroborated must not
+                be presented as earnings. */}
+            {unconfirmedTotal > 0 && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.s2,
+                  paddingTop: space.s2,
+                }}
+              >
+                <Ionicons name="hourglass-outline" size={15} color={colors.warning} />
+                <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
+                  {formatJmd(unconfirmedTotal)} across {unconfirmedCount} job
+                  {unconfirmedCount === 1 ? '' : 's'} is not confirmed by both sides yet, so
+                  it is not counted here.
                 </AppText>
               </View>
             )}

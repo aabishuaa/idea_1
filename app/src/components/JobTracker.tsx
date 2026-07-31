@@ -62,8 +62,18 @@ const DONE_THROUGH: Record<JobStatus, number> = {
  */
 export function JobTracker({ job }: { job: Job }) {
   const { colors } = useTheme();
-  const doneThrough = DONE_THROUGH[job.status];
   const ended = job.status === 'declined' || job.status === 'cancelled';
+
+  /*
+    One signature is visible progress, not completion (migration 0024). A job
+    where one side has confirmed shows the track reaching into the final step
+    without filling it — which is exactly true: the work is reported done and
+    is waiting on the other person.
+  */
+  const halfSigned =
+    job.status !== 'completed' &&
+    Boolean(job.customer_completed_at) !== Boolean(job.worker_completed_at);
+  const doneThrough = Math.max(DONE_THROUGH[job.status], halfSigned ? 3 : 0);
 
   const fill = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;

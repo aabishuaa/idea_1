@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { JobPhotos } from '@/components/JobPhotos';
 import { PersonLink } from '@/components/PersonLink';
+import { CompletionPanel } from '@/components/CompletionPanel';
 import { JobTracker } from '@/components/JobTracker';
 import { StatusPill } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +37,9 @@ export default function JobDetailScreen() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  // RPC refusals are real information ("only the worker can do that") — a
+  // silent no-op would read as the button being broken.
+  const [actionError, setActionError] = useState<string | null>(null);
   // Distinguish "still loading" from "loaded, nothing found" — without this
   // the screen spun forever whenever the row could not be read.
   const [phase, setPhase] = useState<'loading' | 'ready' | 'missing'>('loading');
@@ -153,15 +157,56 @@ export default function JobDetailScreen() {
   const isWorker = session?.user.id === job.worker_id;
   const isCustomer = session?.user.id === job.customer_id;
 
-  const transition = async (status: JobStatus) => {
+  /*
+    Accept / decline / start / cancel. Completion is deliberately NOT here —
+    it needs both sides, so it has its own RPC (see confirmCompletion).
+
+    These go through set_job_status rather than a direct update because
+    migration 0024 revoked the client's UPDATE grant on `status`: a participant
+    being able to write their own job to 'completed' was self-attestation, and
+    the reputation record is only worth something if it cannot be asserted.
+  */
+  const transition = async (status: Exclude<JobStatus, 'completed'>) => {
     setBusy(true);
-    const { error } = await supabase.from('jobs').update({ status }).eq('id', job.id);
+    const { error } = await supabase.rpc('set_job_status', {
+      p_job: job.id,
+      p_status: status,
+    });
     setBusy(false);
-    if (error) return;
-    if (status === 'completed') setCelebration('completed');
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
+    setActionError(null);
     if (status === 'accepted') setCelebration('accepted');
     if (status === 'declined') setCelebration('declined');
     if (status === 'cancelled') setCelebration('cancelled');
+    void load();
+  };
+
+  /**
+   * Sign off the work, and optionally record what was paid.
+   *
+   * The celebration only fires when this confirmation is the one that finishes
+   * the job — congratulating someone for a job still waiting on the other side
+   * would be telling them it is done when it is not.
+   */
+  const confirmCompletion = async (amount: number | null) => {
+    setBusy(true);
+    const { data, error } = await supabase.rpc('confirm_job_completion', {
+      p_job: job.id,
+      p_amount: amount,
+    });
+    setBusy(false);
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
+    setActionError(null);
+    const updated = (Array.isArray(data) ? data[0] : data) as Job | null;
+    if (updated?.status === 'completed' && job.status !== 'completed') {
+      setCelebration('completed');
+    }
     void load();
   };
 
@@ -281,6 +326,20 @@ export default function JobDetailScreen() {
           </View>
         </Card>
 
+        {/*
+          Completion needs both signatures, so it is a panel rather than a
+          button and it is shown to BOTH sides — see CompletionPanel.
+        */}
+        {(isWorker || isCustomer) &&
+          ['accepted', 'in_progress', 'completed'].includes(job.status) && (
+            <CompletionPanel
+              job={job}
+              isCustomer={isCustomer}
+              busy={busy}
+              onConfirm={confirmCompletion}
+            />
+          )}
+
         {/* Lifecycle actions (FR-JOB-1/2; transitions enforced in SQL) */}
         <View style={{ gap: space.s3 }}>
           {isWorker && job.status === 'requested' && (
@@ -292,13 +351,16 @@ export default function JobDetailScreen() {
           {isWorker && job.status === 'accepted' && (
             <Button title="Start job" fullWidth loading={busy} onPress={() => transition('in_progress')} />
           )}
-          {isWorker && job.status === 'in_progress' && (
-            <Button title="Mark completed" fullWidth loading={busy} onPress={() => transition('completed')} />
-          )}
+
           {(isWorker || isCustomer) &&
             ['requested', 'accepted', 'in_progress'].includes(job.status) && (
               <Button title="Cancel" variant="text" onPress={() => transition('cancelled')} />
             )}
+          {actionError && (
+            <AppText variant="bodySm" color="error">
+              {actionError}
+            </AppText>
+          )}
           <Button
             title="Open chat"
             variant="secondary"

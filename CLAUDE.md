@@ -103,6 +103,15 @@ functions.
 - Reputation score is a computed Postgres function, not AI. Recalculates on job
   completion / new review, blending review average, completion rate, response-time
   consistency, and dispute history. Stored on the worker profile.
+- **A job counts only when BOTH sides confirm it** (migration 0024). Clients cannot
+  write `jobs.status` at all — `confirm_job_completion` is the only route to
+  `completed`, and it requires a signature from the customer and the worker.
+  Single-sided completion is self-attestation, which is exactly what makes a
+  reputation record worthless to a lender.
+- **Money is recorded, never moved.** Both sides state what was paid; the amount is
+  only treated as agreed when the two figures match, and unagreed amounts are never
+  summed into earnings or onto the reputation record. Never reintroduce a fallback
+  that treats a budget or a one-sided figure as income.
 - Score is portable and belongs to the worker — frame it as alternative credit data.
 - Fraud detection is heuristic for MVP: review-velocity checks, duplicate
   device/account signals, rating-pattern anomalies. ML fraud is roadmap.
