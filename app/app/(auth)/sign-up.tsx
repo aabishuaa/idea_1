@@ -6,6 +6,7 @@ import { Pressable, View } from 'react-native';
 
 import { PasswordMeter } from '@/components/PasswordMeter';
 import { BrandLockup } from '@/components/BrandMark';
+import { SocialSignIn } from '@/components/SocialSignIn';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
@@ -195,6 +196,11 @@ export default function SignUpScreen() {
             loading={busy}
             disabled={!ready}
           />
+
+          {/* Same flow as sign-in: for Google and Apple there is no meaningful
+              difference between signing up and signing in, and presenting them
+              as two different things is how people end up with two accounts. */}
+          <SocialSignIn onSignedIn={() => router.replace('/(tabs)')} />
 
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.s1 }}>
             <AppText variant="bodySm" color="textMuted">

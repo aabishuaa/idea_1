@@ -3,8 +3,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 
+import {
+  BudgetRange,
+  budgetInverted,
+  budgetNumber,
+  describeBudget,
+  type Budget,
+} from '@/components/BudgetRange';
+import {
+  DateWindowPicker,
+  describeWindow,
+  type DateWindow,
+} from '@/components/DateWindowPicker';
 import { PersonLink } from '@/components/PersonLink';
-import { Chip } from '@/components/ui/badges';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -20,16 +31,8 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useJobDraft } from '@/providers/JobDraftProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
-import type { JobUrgency } from '@/types/db';
 
 const MAX_PHOTOS = 4;
-
-const URGENCIES: { value: JobUrgency; label: string }[] = [
-  { value: 'low', label: 'Whenever' },
-  { value: 'normal', label: 'This week' },
-  { value: 'high', label: 'Soon' },
-  { value: 'emergency', label: 'Emergency' },
-];
 
 /**
  * Job request (FR-JOB-1, FR-DISC-1/2): describe in plain language; the LLM
@@ -49,8 +52,8 @@ export default function NewJobScreen() {
   const [workerAvatar, setWorkerAvatar] = useState<string | null>(null);
   const [description, setDescription] = useState(draft.description);
   const [title, setTitle] = useState(draft.title);
-  const [urgency, setUrgency] = useState<JobUrgency>(draft.urgency);
-  const [budget, setBudget] = useState(draft.budget);
+  const [when, setWhen] = useState<DateWindow>(draft.when);
+  const [budget, setBudget] = useState<Budget>(draft.budget);
   const [tradeSlug, setTradeSlug] = useState<string | null>(draft.tradeSlug);
   const [parish, setParish] = useState<string | null>(draft.parish);
   /*
@@ -117,7 +120,7 @@ export default function NewJobScreen() {
     setDraft({
       description,
       title,
-      urgency,
+      when,
       budget,
       tradeSlug,
       parish,
@@ -127,7 +130,7 @@ export default function NewJobScreen() {
     // setDraft is stable; the draft itself must not be a dependency or this
     // would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, title, urgency, budget, tradeSlug, parish, photos, titleEdited]);
+  }, [description, title, when, budget, tradeSlug, parish, photos, titleEdited]);
 
   const understand = async () => {
     if (description.trim().length < 6) return;
@@ -136,9 +139,16 @@ export default function NewJobScreen() {
       const { intent } = await extractIntent(description.trim());
       if (intent.job_type) setTradeSlug(intent.job_type);
       if (intent.location) setParish(intent.location);
-      setUrgency(intent.urgency);
-      if (intent.budget.max_jmd ?? intent.budget.min_jmd) {
-        setBudget(String(intent.budget.max_jmd ?? intent.budget.min_jmd));
+      /*
+        Urgency is no longer asked for or set here — the customer picks real
+        dates and the database derives urgency from them. Letting the LLM write
+        an urgency back would silently contradict the dates on screen.
+      */
+      if (intent.budget.min_jmd != null || intent.budget.max_jmd != null) {
+        setBudget({
+          min: intent.budget.min_jmd != null ? String(intent.budget.min_jmd) : '',
+          max: intent.budget.max_jmd != null ? String(intent.budget.max_jmd) : '',
+        });
       }
       if (!titleEdited) {
         setTitle(autoTitle(intent.title, intent.job_type, intent.location));
@@ -151,7 +161,10 @@ export default function NewJobScreen() {
     }
   };
 
-  const budgetValue = budget ? Number(budget.replace(/[^0-9.]/g, '')) : null;
+  const budgetMin = budgetNumber(budget.min);
+  const budgetMax = budgetNumber(budget.max);
+  // A max below the min is the customer's typo, not a request we can send.
+  const canSend = description.trim().length >= 3 && !budgetInverted(budget);
 
   const submit = async () => {
     if (!session) return;
@@ -173,9 +186,11 @@ export default function NewJobScreen() {
         description: description.trim(),
         trade_slug: tradeSlug,
         parish,
-        urgency,
-        budget_min_jmd: budgetValue,
-        budget_max_jmd: budgetValue,
+        // urgency is derived from the window by a trigger (migration 0023).
+        needed_from: when.from,
+        needed_by: when.to,
+        budget_min_jmd: budgetMin,
+        budget_max_jmd: budgetMax,
       })
       .select('id')
       .single();
@@ -203,7 +218,11 @@ export default function NewJobScreen() {
       );
     }
 
-    logEvent('job_request_created', { trade_slug: tradeSlug, parish, payload: { urgency } });
+    logEvent('job_request_created', {
+      trade_slug: tradeSlug,
+      parish,
+      payload: { needed_from: when.from, needed_by: when.to },
+    });
     // The request is sent; the draft has done its job.
     clearDraft();
     // Must be the ROUTE PATTERN, not the resolved path: passing
@@ -262,20 +281,12 @@ export default function NewJobScreen() {
               )}
 
               <View style={{ gap: space.s2, paddingTop: space.s1 }}>
-                <SummaryRow
-                  icon="alarm-outline"
-                  label="How soon"
-                  value={URGENCIES.find((option) => option.value === urgency)?.label ?? 'This week'}
-                />
+                <SummaryRow icon="calendar-outline" label="When" value={describeWindow(when)} />
                 {parish && (
                   <SummaryRow icon="location-outline" label="Where" value={parish} />
                 )}
-                {budgetValue != null && (
-                  <SummaryRow
-                    icon="cash-outline"
-                    label="Budget"
-                    value={`JMD ${budgetValue.toLocaleString('en-JM')}`}
-                  />
+                {(budgetMin != null || budgetMax != null) && (
+                  <SummaryRow icon="cash-outline" label="Budget" value={describeBudget(budget)} />
                 )}
                 {photos.length > 0 && (
                   <SummaryRow
@@ -358,21 +369,7 @@ export default function NewJobScreen() {
           success={title && !titleEdited ? 'Suggested — edit if you like' : undefined}
         />
 
-        <View style={{ gap: space.s2 }}>
-          <AppText variant="label" color="textMuted">
-            How urgent?
-          </AppText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s2 }}>
-            {URGENCIES.map((option) => (
-              <Chip
-                key={option.value}
-                label={option.label}
-                selected={urgency === option.value}
-                onPress={() => setUrgency(option.value)}
-              />
-            ))}
-          </View>
-        </View>
+        <DateWindowPicker value={when} onChange={setWhen} />
 
         {/* A photo says more than a paragraph — the pro is deciding whether
             they can do this job, and "mi sink a leak" is ambiguous. */}
@@ -437,14 +434,7 @@ export default function NewJobScreen() {
           </View>
         </View>
 
-        <Input
-          label="Budget (JMD, optional)"
-          placeholder="e.g. 10000"
-          keyboardType="numeric"
-          value={budget}
-          onChangeText={setBudget}
-          error={error ?? undefined}
-        />
+        <BudgetRange value={budget} onChange={setBudget} />
 
         {/* The old gate needed 8 characters with no explanation, so the
             button looked broken while you typed. Now it needs 3 and says why. */}
@@ -459,7 +449,7 @@ export default function NewJobScreen() {
           icon={params.workerId ? 'send' : 'search'}
           fullWidth
           loading={busy}
-          disabled={description.trim().length < 3}
+          disabled={!canSend}
           onPress={submit}
         />
       </View>

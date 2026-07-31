@@ -75,7 +75,6 @@ export default function ThreadScreen() {
   const [other, setOther] = useState<Counterparty | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [threadJob, setThreadJob] = useState<Job | null>(null);
   const [sharedJobs, setSharedJobs] = useState<Record<string, Job>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList<ChatRow>>(null);
@@ -128,8 +127,10 @@ export default function ThreadScreen() {
       (jobRows as Job[] | null)?.forEach((job) => {
         map[job.id] = job;
       });
+      // sharedJobs still backs the job cards already in the history; the
+      // thread's own job no longer needs its own state now that nothing
+      // composes a new card from it.
       setSharedJobs(map);
-      if (threadRow?.job_id) setThreadJob(map[threadRow.job_id] ?? null);
     }
 
     // Signed URLs for image attachments (the bucket is private).
@@ -299,29 +300,6 @@ export default function ThreadScreen() {
       successTap();
     } finally {
       setUploading(false);
-    }
-  };
-
-  /** Share the booking this conversation is about, as a tappable card. */
-  const shareJobCard = async () => {
-    if (!session || !id || !threadJob) return;
-    lightTap();
-    const { data } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: id,
-        sender_id: session.user.id,
-        body: threadJob.title,
-        kind: 'job_card',
-        job_id: threadJob.id,
-      })
-      .select('*')
-      .single();
-    if (data) {
-      const saved = data as ChatMessage;
-      setMessages((current) =>
-        current.some((m) => m.id === saved.id) ? current : [...current, saved],
-      );
     }
   };
 
@@ -558,27 +536,15 @@ export default function ThreadScreen() {
           )}
         </Pressable>
 
-        {/* Share the booking this chat is about */}
-        {threadJob && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Share this booking"
-            onPress={() => void shareJobCard()}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: radius.full,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Ionicons name="briefcase-outline" size={18} color={colors.accent} />
-          </Pressable>
-        )}
-
+        {/*
+          The "share this booking" button was removed deliberately. It posted a
+          job card into the thread, but the chat is already opened FROM a
+          booking and the header names it — so the card restated what the
+          screen already said, and the insert had its own bugs on top of that.
+          Existing job_card messages still render (see the message list) so
+          nothing already sent disappears; there is just no longer a way to
+          send a new one.
+        */}
         <View
           style={{
             flex: 1,

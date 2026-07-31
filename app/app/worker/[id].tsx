@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Modal, Pressable, View } from 'react-native';
 
 import { PersonLink } from '@/components/PersonLink';
+import { ContactCard } from '@/components/ContactCard';
 import { PortfolioGrid } from '@/components/PortfolioGrid';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge, Chip } from '@/components/ui/badges';
@@ -18,6 +19,7 @@ import { FadeSlideIn, lightTap, successTap } from '@/components/ui/animated';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { formatRate, timeAgo } from '@/lib/format';
 import { pickImage, publicUrl, uploadUserImage, type PickedImage } from '@/lib/media';
+import { getContact, hasAnyContact, type WorkerContact } from '@/lib/contact';
 import { supabase } from '@/lib/supabase';
 import { openThread } from '@/lib/threads';
 import { useAuth } from '@/providers/AuthProvider';
@@ -57,6 +59,7 @@ export default function WorkerProfileScreen() {
   const [pending, setPending] = useState<PickedImage | null>(null);
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [contact, setContact] = useState<WorkerContact | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -81,6 +84,13 @@ export default function WorkerProfileScreen() {
         .eq('user_id', id)
         .order('created_at', { ascending: false }),
     ]);
+
+    /*
+      Contact details. This can legitimately come back null — the policy hides
+      an unpublished number from anyone without a booking — so a null is a
+      normal outcome, not a failure, and simply means no Contact card.
+    */
+    setContact(await getContact(id));
 
     if (session) {
       const { data: favorite } = await supabase
@@ -400,6 +410,12 @@ export default function WorkerProfileScreen() {
               />
             </View>
           </View>
+        )}
+
+        {/* ── Contact ─────────────────────────────────────────────────
+            Only present at all when this viewer is entitled to see it. */}
+        {hasAnyContact(contact) && (
+          <ContactCard contact={contact!} privateToYou={!contact!.show_publicly} />
         )}
 
         {/* ── Rate ────────────────────────────────────────────────────── */}

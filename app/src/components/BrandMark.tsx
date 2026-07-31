@@ -9,6 +9,20 @@ import { radius, space } from '@/theme/tokens';
 
 type MarkVariant = 'display' | 'h1' | 'h2' | 'h3';
 
+/**
+ * The home logo, in the version that suits the current theme.
+ *
+ * A single logo cannot serve both themes: artwork with dark strokes vanishes
+ * on a dark background and vice versa. Two assets, picked at render time —
+ * every caller goes through here so a new theme never misses one.
+ */
+export function useHomeLogo() {
+  const { isDark } = useTheme();
+  return isDark
+    ? require('../../assets/home-logo.png')
+    : require('../../assets/light-mode-home-logo.png');
+}
+
 /** The dot is a drawn circle, so it stays perfectly round at every size. */
 const DOT_SIZE: Record<MarkVariant, number> = {
   display: 10,
@@ -110,6 +124,7 @@ export function BrandLockup({
 }) {
   const fallback: Record<MarkVariant, number> = { display: 56, h1: 40, h2: 26, h3: 22 };
   const size = markSize ?? fallback[variant];
+  const logo = useHomeLogo();
   return (
     <View
       accessibilityRole="image"
@@ -120,7 +135,7 @@ export function BrandLockup({
         <RocketMark size={size} />
       ) : (
         <Image
-          source={require('../../assets/home-logo.png')}
+          source={logo}
           style={{ width: size, height: size, borderRadius: size * 0.24 }}
           resizeMode="contain"
         />
@@ -140,6 +155,7 @@ export function BrandLockup({
  */
 export function RocketLaunch() {
   const { colors } = useTheme();
+  const logoSource = useHomeLogo();
   const shake = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(0)).current;
   const flame = useRef(new Animated.Value(0)).current;
@@ -147,34 +163,39 @@ export function RocketLaunch() {
 
   useEffect(() => {
     Animated.sequence([
-      // 1. Ignition: a short rattle on the pad.
+      // 1. Ignition: the engines catch and the rocket rattles on the pad.
+      //    Long enough to build to the launch rather than just precede it.
       Animated.parallel([
         Animated.timing(flame, {
           toValue: 1,
-          duration: 260,
+          duration: 420,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.loop(
           Animated.sequence([
-            Animated.timing(shake, { toValue: 1, duration: 45, useNativeDriver: true }),
-            Animated.timing(shake, { toValue: -1, duration: 45, useNativeDriver: true }),
+            Animated.timing(shake, { toValue: 1, duration: 55, useNativeDriver: true }),
+            Animated.timing(shake, { toValue: -1, duration: 55, useNativeDriver: true }),
           ]),
-          { iterations: 5 },
+          { iterations: 9 },
         ),
       ]),
-      // 2. Liftoff.
+      // 2. The half-beat of held stillness before release. This is what makes
+      //    the launch feel like a launch instead of a transition.
+      Animated.delay(220),
+      // 3. Liftoff.
       Animated.timing(lift, {
         toValue: 1,
-        duration: 600,
+        duration: 900,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-      // 3. The logo is revealed where the rocket was.
+      // 4. The logo is revealed where the rocket was — a softer, slower spring
+      //    so it settles into place rather than snapping.
       Animated.spring(logo, {
         toValue: 1,
-        speed: 11,
-        bounciness: 9,
+        speed: 6,
+        bounciness: 8,
         useNativeDriver: true,
       }),
     ]).start();
@@ -243,7 +264,7 @@ export function RocketLaunch() {
           }}
         >
           <Image
-            source={require('../../assets/home-logo.png')}
+            source={logoSource}
             style={{ width: 96, height: 96 }}
             resizeMode="contain"
             accessibilityLabel="myB logo"
