@@ -1,13 +1,19 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
+import { EMPTY_BUDGET, type Budget } from '@/components/BudgetRange';
+import { EMPTY_WINDOW, type DateWindow } from '@/components/DateWindowPicker';
 import type { PickedImage } from '@/lib/media';
-import type { JobUrgency } from '@/types/db';
 
 export interface JobDraft {
   description: string;
   title: string;
-  urgency: JobUrgency;
-  budget: string;
+  /**
+   * When they need it. Replaced the single `urgency` adjective — the stored
+   * urgency is now derived from these dates by the database (migration 0023).
+   */
+  when: DateWindow;
+  /** A range, not a figure: the DB has always had budget_min/budget_max. */
+  budget: Budget;
   tradeSlug: string | null;
   parish: string | null;
   photos: PickedImage[];
@@ -18,8 +24,8 @@ export interface JobDraft {
 const EMPTY: JobDraft = {
   description: '',
   title: '',
-  urgency: 'normal',
-  budget: '',
+  when: EMPTY_WINDOW,
+  budget: EMPTY_BUDGET,
   tradeSlug: null,
   parish: null,
   photos: [],

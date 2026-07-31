@@ -236,12 +236,48 @@ export default function HomeScreen() {
             </ScalePress>
           )}
 
-          {/* Search */}
-          <Pressable accessibilityRole="button" onPress={() => router.push('/search')}>
-            <View pointerEvents="none">
-              <Input icon="search" placeholder="What service do you need?" editable={false} />
-            </View>
-          </Pressable>
+          {/* Search, and — for anyone who cannot yet name what they need —
+              Explore. A search box is useless if you do not know the word for
+              the thing you want, which is most first-time customers. */}
+          <View style={{ flexDirection: 'row', gap: space.s2 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Search for a service"
+              onPress={() => router.push('/search')}
+              style={{ flex: 1 }}
+            >
+              <View pointerEvents="none">
+                <Input icon="search" placeholder="Search a service or a name" editable={false} />
+              </View>
+            </Pressable>
+            <ScalePress
+              haptic
+              onPress={() => router.push('/explore')}
+              containerStyle={{ alignSelf: 'stretch' }}
+            >
+              <View
+                accessibilityRole="button"
+                accessibilityLabel="Explore work from pros"
+                style={{
+                  height: '100%',
+                  minWidth: 60,
+                  paddingHorizontal: space.s3,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.accentSoft,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                }}
+              >
+                <Ionicons name="grid-outline" size={18} color={colors.accent} />
+                <AppText variant="caption" color="accent" style={{ fontSize: 10 }}>
+                  Explore
+                </AppText>
+              </View>
+            </ScalePress>
+          </View>
 
           {/* Category cards — most-booked services right now */}
           <View style={{ gap: space.s3 }}>
