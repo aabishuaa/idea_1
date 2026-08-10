@@ -24,6 +24,10 @@
 --   devon@demo.myb   — carpenter (unverified — shows the verification CTA)
 --   worker001..100@demo.myb / customer01..10@demo.myb — the bulk population
 --
+-- NOTE: this file seeds no imagery — avatars and portfolio photos have to be
+-- fetched from outside the database. Run `node supabase/scripts/seed-images.mjs`
+-- afterwards (SETUP.md §4, "Photos") or every pro shows initials on a blank grid.
+--
 -- NOTE: service_descriptions.embedding stays NULL here (no LLM key in seed).
 -- Run the embed-text function per service, or the ai-service ingest script,
 -- to enable semantic ranking. Matching still works via filters without it.
