@@ -237,6 +237,60 @@ The bulk block near the end of `seed.sql` is a plain loop — edit `for i in 1..
 (workers) or `for i in 1..10` (customers) and re-seed. Everything else derives from
 the loop counter, so the data stays deterministic and identical for the whole team.
 
+### Photos — giving the marketplace a face
+
+`seed.sql` cannot do this part. It builds 233 accounts with real job history, but every
+one of them renders as a coloured circle with two initials and an empty portfolio,
+because the images have to be fetched from somewhere the database cannot reach.
+
+`supabase/scripts/seed-images.mjs` does it. It searches a stock-photo provider for
+imagery matching what each pro actually does — drain repairs for plumbers, box braids
+for hairdressers, cracked screens for phone-repair techs — and writes portraits into
+`profiles.avatar_url` and work photos into `portfolio_items`.
+
+```bash
+export SUPABASE_URL="https://<ref>.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="<service role key>"   # Project Settings → API
+export PEXELS_API_KEY="<free key>"                      # optional, much better results
+
+node supabase/scripts/seed-images.mjs --dry-run   # look first
+node supabase/scripts/seed-images.mjs             # ~5–10 min, ~100 MB of Storage
+```
+
+No installs — it uses plain `fetch` against the Supabase REST and Storage APIs, so it
+runs from a fresh clone with nothing but Node 18+.
+
+**Providers**, in quality order; the first one with a key set wins:
+
+| Provider | Key | Notes |
+| --- | --- | --- |
+| Pexels | free, 2-minute signup at [pexels.com/api](https://www.pexels.com/api/) | Best results — recommended |
+| Unsplash | free at [unsplash.com/developers](https://unsplash.com/developers) | 50 requests/hour on the demo tier |
+| Openverse | **none needed** | The default. CC-licensed, more variable quality |
+
+**Useful flags**
+
+| Flag | Effect |
+| --- | --- |
+| `--dry-run` | Search and report, write nothing |
+| `--mode=link` | Store remote URLs instead of copying into Storage — uses 0 MB of your 1 GB |
+| `--only=plumbing,tiling` | Redo just a few trades |
+| `--per-trade=10` `--per-worker=6` `--avatars=120` | Volume knobs |
+| `--skip-avatars` | Portfolios only |
+
+Safety and repeatability:
+
+- Only accounts under the demo UUID prefix `00000000-0000-4000-` are ever read or
+  written, so it cannot touch a real user's profile or their uploaded portfolio.
+- Re-running replaces what the previous run wrote, and the photo/caption pairing is
+  deterministic, so the whole team sees an identical marketplace.
+- Attribution for every image lands in `supabase/scripts/seed-images-credits.json`.
+  Openverse returns CC-licensed work that legally requires credit — keep that file.
+
+> `--mode=upload` (the default) is the one to use before a pitch: the images are served
+> from your own Supabase Storage, so nothing depends on a third-party CDN being
+> reachable from the venue's wifi.
+
 ### Before a live demo — fill the request inbox
 
 `seed.sql` builds *history*: completed jobs, so ratings and reputation are computed by
@@ -388,6 +442,7 @@ Notes:
 | 14 | `app/assets/light-mode-home-logo.png` | real light-theme logo | replace the committed placeholder |
 | 15 | Supabase → Providers | Google client ID + secret | *optional* — §6c |
 | 16 | Supabase → Providers | Apple Services ID / Team ID / Key ID / .p8 | *optional*, needs a paid Apple account — §6c |
+| 17 | `seed-images.mjs` env | `SUPABASE_SERVICE_ROLE_KEY`, `PEXELS_API_KEY` | *optional* — Supabase → Settings → API; pexels.com/api (§4 "Photos") |
 
 ---
 
@@ -398,6 +453,11 @@ Notes:
   (e.g. `http://192.168.1.20:8000`) and make sure the phone is on the same network.
 - **AI features spin for ~1 min then work** — free-host cold start; expected. Warm the
   service before demos.
+- **Every pro shows initials and an empty portfolio** — `seed.sql` seeds no imagery.
+  Run `node supabase/scripts/seed-images.mjs` (§4 "Photos").
+- **Seeded photos are grey boxes** — usually `--mode=link` against a CDN the device
+  can't reach. Re-run without it so the images are served from your own Storage.
+  If it happens in upload mode, check the `portfolios` bucket is still public.
 - **LLM returns 429** — you hit Gemini's daily free quota; the failover automatically
   moves to Groq. If both are exhausted, BizBot answers degrade to "try again later" —
   wait for quota reset.

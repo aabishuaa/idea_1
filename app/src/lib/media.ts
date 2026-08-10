@@ -145,7 +145,17 @@ export async function uploadTo(
   return path;
 }
 
-/** Public URL for a file in a public bucket (portfolios). */
+/**
+ * Public URL for a file in a public bucket (portfolios).
+ *
+ * An absolute URL is returned untouched. Rows can therefore hold either a
+ * bucket-relative path (everything the app itself uploads) or a full remote
+ * URL — which is what `supabase/scripts/seed-images.mjs --mode=link` writes
+ * when demo imagery is pointed at a CDN instead of being copied into Storage.
+ * Without this, getPublicUrl would happily glue the bucket prefix onto an
+ * "https://…" string and every seeded photo would render as a grey box.
+ */
 export function publicUrl(bucket: string, path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
