@@ -18,12 +18,7 @@ import { useJobDraft } from '@/providers/JobDraftProvider';
 import { useTheme } from '@/theme/ThemeContext';
 import { radius, space } from '@/theme/tokens';
 import type { MatchedWorker, Trade } from '@/types/db';
-
-const PARISHES = [
-  'Kingston', 'St. Andrew', 'St. Catherine', 'St. James', 'Manchester',
-  'Clarendon', 'St. Ann', 'Portland', 'St. Thomas', 'St. Mary', 'Trelawny',
-  'Hanover', 'Westmoreland', 'St. Elizabeth',
-];
+import { LOCATION_FILTERS } from '@/lib/parishes';
 
 /** Things people actually type — shown before the first search. */
 const EXAMPLE_QUERIES = [
@@ -130,14 +125,22 @@ export default function SearchScreen() {
   return (
     <Screen padded={false}>
       <View style={{ padding: space.s4, gap: space.s3 }}>
+        {/* One box, two jobs. It describes work ("mi sink a leak") and it
+            finds a person by name — a customer who already knows who they want
+            should not have to hunt for them through a trade category. Name
+            matching happens in match_workers (migration 0023), so the same
+            query does both without a mode switch to get wrong. */}
         <Input
           icon="search"
-          placeholder="Try “tutor”, “braid my hair”, “mi sink a leak”…"
+          placeholder="A service, or someone’s name…"
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={submit}
           returnKeyType="search"
         />
+        <AppText variant="caption" color="textMuted">
+          Try “tutor”, “braid my hair”, “mi sink a leak” — or type a name.
+        </AppText>
 
         {/* Active filters */}
         {hasSearch && (
@@ -267,7 +270,7 @@ export default function SearchScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', gap: space.s2, paddingBottom: space.s2 }}>
               <Chip label="All parishes" selected={parish === null} onPress={() => setParish(null)} />
-              {PARISHES.map((name) => (
+              {LOCATION_FILTERS.map((name) => (
                 <Chip
                   key={name}
                   label={name}
@@ -293,7 +296,7 @@ export default function SearchScreen() {
           <>
             <EmptyState
               title="No pros match that yet"
-              message={`Nobody offering “${submitted.trim() || activeTrade?.label}” in ${parish ?? 'Jamaica'} right now. Try different words, or widen the parish.`}
+              message={`No pros or people matching “${submitted.trim() || activeTrade?.label}” in ${parish ?? 'Jamaica'} right now. Try different words, check the spelling of a name, or widen the parish.`}
               actionTitle="Clear search"
               onAction={clear}
             />

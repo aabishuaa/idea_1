@@ -342,6 +342,86 @@ the `jobs` table, and RLS still decides who receives what.
 
 ---
 
+## 6d. Verifying a migration before it touches the live project
+
+The free tier gives one database and no staging, and CI has no Docker, so
+`supabase start` is not an option. `supabase/test/` stands up enough of Supabase
+on a bare PostgreSQL 16 to prove a migration against a from-scratch database:
+
+```bash
+# One-off: a throwaway cluster on a non-standard port.
+initdb -D /tmp/mybtest -A trust
+pg_ctl -D /tmp/mybtest -o "-p 54999 -k /tmp/mybtest" start
+
+# Platform shims (auth/storage schemas, roles, grants, realtime publication).
+psql -h /tmp/mybtest -p 54999 -d postgres -f supabase/test/harness.sql
+
+# Every migration, in order, stopping on the first failure.
+for f in supabase/migrations/*.sql; do
+  psql -h /tmp/mybtest -p 54999 -d postgres -v ON_ERROR_STOP=1 -q -f "$f" || break
+done
+
+# Behavioural assertions.
+psql -h /tmp/mybtest -p 54999 -d postgres -v ON_ERROR_STOP=1 -f supabase/test/verify_0023.sql
+```
+
+`harness.sql` emulates the **platform**, not the product — `auth.uid()` reads a
+session GUC so a test can become a specific user:
+
+```sql
+set role authenticated;
+select set_config('request.jwt.claim.sub', '<uuid>', false);
+```
+
+One trap worth knowing, because it makes RLS tests pass for the wrong reason:
+resolve every user id **before** switching role. `profiles` is itself under RLS,
+so looking an id up after the switch returns NULL, the claim is never set, and
+every "must not be visible" assertion passes against a NULL user. `verify_0023.sql`
+includes a positive control (the owner *can* read their own row) specifically to
+catch that.
+
+---
+
+## 6c. Google & Apple sign-in — what has to be true
+
+The buttons are in the app already (sign-in and sign-up). They do nothing until
+the providers are switched on for the project, and until then they say so in
+plain language rather than showing an API error.
+
+**Google** — free.
+
+1. Google Cloud console → APIs & Services → Credentials → **Create OAuth client
+   ID** → *Web application*.
+2. Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+3. Supabase → Authentication → **Providers → Google** → paste the client ID and
+   secret, enable.
+4. Supabase → Authentication → **URL Configuration → Redirect URLs** → add
+   `myb://auth/callback` (and `exp://` variants if you are testing in Expo Go —
+   `npx expo start` prints the exact one).
+
+**Apple** — needs a paid Apple Developer account (US$99/yr). This is the one
+thing in myB that cannot be done on a free tier, which is why the Apple button
+is only offered on iOS and why email/password remains a first-class path.
+
+1. Apple Developer → Certificates, Identifiers & Profiles → **Services ID**,
+   with Sign in with Apple enabled.
+2. Return URL: `https://<project-ref>.supabase.co/auth/v1/callback`
+3. Create a **Sign in with Apple key** (.p8) and note the Key ID and Team ID.
+4. Supabase → Authentication → Providers → Apple → fill in Services ID, Team ID,
+   Key ID and the .p8 contents.
+
+Notes:
+
+- The flow is the **system browser**, not a native SDK, so it works in Expo Go.
+  A native Google/Apple SDK would require a custom dev build — the thing we
+  deliberately avoid so the app can be demoed from a QR code.
+- Both implicit (`#access_token=`) and PKCE (`?code=`) redirects are handled, so
+  it does not matter which flow the project is configured for.
+- Nothing about OAuth is required for the demo. If you have not set it up, use
+  email + password and the buttons will explain themselves.
+
+---
+
 ## 7. Placeholder checklist (everything you must fill in)
 
 | # | Where | Key | Get it from |
@@ -359,7 +439,10 @@ the `jobs` table, and RLS still decides who receives what.
 | 11 | `app/app.json` | `extra.eas.projectId` | `eas init` (only for EAS builds/push) |
 | 12 | `docs/kb/*.md` | real source text + `source_url` | official TAJ / COJ / NIS publications |
 | 13 | `supabase/seed_hosted_helpers.sql` | demo user UUIDs | Supabase → Authentication → Users |
-| 14 | `seed-images.mjs` env | `SUPABASE_SERVICE_ROLE_KEY`, `PEXELS_API_KEY` | Supabase → Settings → API; pexels.com/api (§4 "Photos") |
+| 14 | `app/assets/light-mode-home-logo.png` | real light-theme logo | replace the committed placeholder |
+| 15 | Supabase → Providers | Google client ID + secret | *optional* — §6c |
+| 16 | Supabase → Providers | Apple Services ID / Team ID / Key ID / .p8 | *optional*, needs a paid Apple account — §6c |
+| 17 | `seed-images.mjs` env | `SUPABASE_SERVICE_ROLE_KEY`, `PEXELS_API_KEY` | *optional* — Supabase → Settings → API; pexels.com/api (§4 "Photos") |
 
 ---
 

@@ -27,6 +27,8 @@ export interface Profile {
   trn: string | null;
   country: string;
   parish: string | null;
+  /** Selected by AuthProvider's `select('*')`; shown as "on myB since". */
+  created_at: string;
 }
 
 export interface WorkerProfile {
@@ -80,7 +82,11 @@ export interface Job {
   description: string;
   trade_slug: string | null;
   parish: string | null;
+  /** Derived in the database from the date window below (migration 0023). */
   urgency: JobUrgency;
+  /** The date window the customer asked for. Null when they are flexible. */
+  needed_from: string | null;
+  needed_by: string | null;
   budget_min_jmd: number | null;
   budget_max_jmd: number | null;
   agreed_price_jmd: number | null;
@@ -248,6 +254,8 @@ export interface IncomingRequest {
   trade_slug: string | null;
   parish: string | null;
   urgency: JobUrgency;
+  needed_from: string | null;
+  needed_by: string | null;
   budget_min_jmd: number | null;
   budget_max_jmd: number | null;
   requested_at: string;

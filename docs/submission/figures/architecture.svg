@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000" viewBox="0 0 1400 1000">
+  <rect width="1400" height="1000" fill="#FFFFFF"/>
+
+  <!-- ============ SURFACE 1: EXPO APP ============ -->
+  <rect x="60" y="40" width="1280" height="150" rx="16" fill="#EAF2FE" stroke="#1D6FD8" stroke-width="3"/>
+  <text x="90" y="82" font-family="Helvetica, Arial" font-size="27" font-weight="bold" fill="#0F3E85">SURFACE 1 — Expo app (React Native + TypeScript, Expo Router)</text>
+  <text x="90" y="118" font-family="Helvetica, Arial" font-size="21" fill="#31404F">All UI · 37 screens · on-device liveness challenge · offline-tolerant drafts · light + dark themes</text>
+  <text x="90" y="152" font-family="Helvetica, Arial" font-size="21" fill="#31404F">Discovery · Booking · Realtime chat · Worker dashboard · Verification · Formalization pathway · BizBot</text>
+  <text x="90" y="181" font-family="Helvetica, Arial" font-size="19" font-style="italic" fill="#5A6672">Holds only the anon key. Every read and write is authorised by the database, never by the client.</text>
+
+  <!-- arrows down from app -->
+  <line x1="380" y1="190" x2="380" y2="255" stroke="#1D6FD8" stroke-width="3" marker-end="url(#a)"/>
+  <line x1="1090" y1="190" x2="1090" y2="255" stroke="#7C4DFF" stroke-width="3" marker-end="url(#b)"/>
+  <text x="395" y="228" font-family="Helvetica, Arial" font-size="18" fill="#1D6FD8">anon key + Row Level Security</text>
+  <text x="915" y="228" font-family="Helvetica, Arial" font-size="18" fill="#7C4DFF" text-anchor="end">HTTPS + JWT (optional)</text>
+
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1D6FD8"/>
+    </marker>
+    <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7C4DFF"/>
+    </marker>
+    <marker id="c" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0F8A5F"/>
+    </marker>
+  </defs>
+
+  <!-- ============ SURFACE 2: SUPABASE ============ -->
+  <rect x="60" y="260" width="830" height="510" rx="16" fill="#F4F8FD" stroke="#1D6FD8" stroke-width="3"/>
+  <text x="90" y="302" font-family="Helvetica, Arial" font-size="27" font-weight="bold" fill="#0F3E85">SURFACE 2 — Supabase (system of record)</text>
+
+  <rect x="90" y="322" width="770" height="128" rx="10" fill="#FFFFFF" stroke="#BBD3F0" stroke-width="2"/>
+  <text x="112" y="354" font-family="Helvetica, Arial" font-size="22" font-weight="bold" fill="#0F3E85">PostgreSQL 16 + PostGIS + pgvector + pg_trgm</text>
+  <text x="112" y="386" font-family="Helvetica, Arial" font-size="19" fill="#31404F">22 migrations · Row Level Security on every table · column-level GRANTs</text>
+  <text x="112" y="414" font-family="Helvetica, Arial" font-size="19" fill="#31404F">SQL functions: match_workers() · compute_reputation() · run_fraud_checks()</text>
+  <text x="112" y="440" font-family="Helvetica, Arial" font-size="19" fill="#31404F">search_kb() · get_worker_checklist() · get_my_business_stats()</text>
+
+  <rect x="90" y="466" width="374" height="112" rx="10" fill="#FFFFFF" stroke="#BBD3F0" stroke-width="2"/>
+  <text x="112" y="498" font-family="Helvetica, Arial" font-size="22" font-weight="bold" fill="#0F3E85">Auth · Storage · Realtime</text>
+  <text x="112" y="528" font-family="Helvetica, Arial" font-size="19" fill="#31404F">Email + phone OTP</text>
+  <text x="112" y="554" font-family="Helvetica, Arial" font-size="19" fill="#31404F">ID images, portfolios, job photos</text>
+
+  <rect x="486" y="466" width="374" height="112" rx="10" fill="#FFFFFF" stroke="#BBD3F0" stroke-width="2"/>
+  <text x="508" y="498" font-family="Helvetica, Arial" font-size="22" font-weight="bold" fill="#0F3E85">Edge Functions (Deno)</text>
+  <text x="508" y="528" font-family="Helvetica, Arial" font-size="19" fill="#31404F">bizbot · extract-intent</text>
+  <text x="508" y="554" font-family="Helvetica, Arial" font-size="19" fill="#31404F">embed-text · keepwarm</text>
+
+  <line x1="673" y1="578" x2="673" y2="618" stroke="#0F8A5F" stroke-width="3" marker-end="url(#c)"/>
+
+  <rect x="90" y="622" width="770" height="120" rx="10" fill="#EAF7F1" stroke="#0F8A5F" stroke-width="2"/>
+  <text x="112" y="654" font-family="Helvetica, Arial" font-size="22" font-weight="bold" fill="#0B6B4A">Language layer — Gemini 2.5 Flash, failing over to Groq (Llama)</text>
+  <text x="112" y="686" font-family="Helvetica, Arial" font-size="18" fill="#31404F">Used only for language: intent extraction, and phrasing answers from retrieved passages.</text>
+  <text x="112" y="714" font-family="Helvetica, Arial" font-size="18" fill="#31404F">Never for matching weights, reputation, checklists, thresholds, or a worker&#39;s own numbers.</text>
+  <text x="112" y="736" font-family="Helvetica, Arial" font-size="18" font-style="italic" fill="#5A6672">If both providers are down, BizBot quotes the source passages verbatim rather than failing.</text>
+
+  <!-- ============ SURFACE 3: AI SERVICE ============ -->
+  <rect x="915" y="260" width="425" height="316" rx="16" fill="#F6F2FF" stroke="#7C4DFF" stroke-width="3"/>
+  <text x="945" y="302" font-family="Helvetica, Arial" font-size="27" font-weight="bold" fill="#4B2BB5">SURFACE 3 — AI service</text>
+  <text x="945" y="334" font-family="Helvetica, Arial" font-size="21" fill="#31404F">Python 3.11 · FastAPI · Pydantic</text>
+
+  <rect x="945" y="356" width="365" height="96" rx="10" fill="#FFFFFF" stroke="#CBBDF5" stroke-width="2"/>
+  <text x="967" y="386" font-family="Helvetica, Arial" font-size="21" font-weight="bold" fill="#4B2BB5">Face verification</text>
+  <text x="967" y="414" font-family="Helvetica, Arial" font-size="19" fill="#31404F">POST /embed-id · POST /match</text>
+  <text x="967" y="440" font-family="Helvetica, Arial" font-size="19" fill="#31404F">Embedding + cosine similarity</text>
+
+  <rect x="945" y="466" width="365" height="88" rx="10" fill="#FFFFFF" stroke="#CBBDF5" stroke-width="2"/>
+  <text x="967" y="496" font-family="Helvetica, Arial" font-size="21" font-weight="bold" fill="#4B2BB5">Optional semantic RAG</text>
+  <text x="967" y="524" font-family="Helvetica, Arial" font-size="19" fill="#31404F">POST /query · pgvector retrieval</text>
+  <text x="967" y="548" font-family="Helvetica, Arial" font-size="18" font-style="italic" fill="#5A6672">An enhancement, never a dependency</text>
+
+  <!-- free-tier posture -->
+  <rect x="915" y="596" width="425" height="174" rx="16" fill="#F4F8FD" stroke="#1D6FD8" stroke-width="3"/>
+  <text x="945" y="636" font-family="Helvetica, Arial" font-size="24" font-weight="bold" fill="#0F3E85">Cost to run today</text>
+  <text x="945" y="674" font-family="Helvetica, Arial" font-size="40" font-weight="bold" fill="#0F8A5F">US$0 / month</text>
+  <text x="945" y="710" font-family="Helvetica, Arial" font-size="19" fill="#31404F">Every component sits on a free tier.</text>
+  <text x="945" y="738" font-family="Helvetica, Arial" font-size="19" fill="#31404F">The paid upgrade path is a config</text>
+  <text x="945" y="762" font-family="Helvetica, Arial" font-size="19" fill="#31404F">change, not a rewrite.</text>
+
+  <!-- ============ DEGRADATION LADDER ============ -->
+  <rect x="60" y="800" width="1280" height="160" rx="16" fill="#FFF8E8" stroke="#C98A0B" stroke-width="3"/>
+  <text x="90" y="842" font-family="Helvetica, Arial" font-size="27" font-weight="bold" fill="#8A5F05">Designed to degrade, never to break</text>
+  <text x="90" y="882" font-family="Helvetica, Arial" font-size="20" fill="#31404F">Search: semantic (pgvector) → full-text + trigram + trade synonyms in Postgres → browse by category</text>
+  <text x="90" y="912" font-family="Helvetica, Arial" font-size="20" fill="#31404F">BizBot: edge function + LLM → Python service → the app queries search_kb() directly and quotes the documents</text>
+  <text x="90" y="942" font-family="Helvetica, Arial" font-size="20" fill="#31404F">Every core journey — find, book, chat, get paid, formalize — works with no LLM key and no Python service running.</text>
+</svg>
